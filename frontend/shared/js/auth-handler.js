@@ -133,6 +133,9 @@ async function authenticateUser(email, password) {
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 1000));
     
+    // Debug logging for testing
+    console.log('Login attempt:', { email: email, password: password });
+    
     // Mock authentication - check against sample data from database
     const sampleUsers = {
         'john.doe@email.com': {
@@ -150,14 +153,21 @@ async function authenticateUser(email, password) {
         }
     };
     
+    // Debug logging
+    console.log('Available users:', Object.keys(sampleUsers));
+    console.log('Email match:', sampleUsers[email] ? 'Found' : 'Not found');
+    console.log('Password match:', password === 'password123' ? 'Correct' : 'Incorrect');
+    
     // Check if user exists and password is correct (in real app, password would be hashed)
     if (sampleUsers[email] && password === 'password123') {
+        console.log('Authentication successful');
         return {
             success: true,
             token: 'mock-jwt-token-' + Date.now(),
             user: sampleUsers[email]
         };
     } else {
+        console.log('Authentication failed');
         return {
             success: false,
             message: 'Invalid email or password'

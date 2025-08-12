@@ -64,7 +64,19 @@ function checkAuthStatus() {
 
 // Redirect to dashboard
 function redirectToDashboard() {
-    window.location.href = '../patient/pages/patient-dashboard.html';
+    // Check current location to determine correct path
+    const currentPath = window.location.pathname;
+    
+    if (currentPath.includes('patient/pages/')) {
+        // Already in patient pages directory
+        window.location.href = 'patient-dashboard.html';
+    } else if (currentPath.includes('patient/')) {
+        // In patient directory, need to go to pages
+        window.location.href = 'pages/patient-dashboard.html';
+    } else {
+        // From main site or other location
+        window.location.href = 'patient/pages/patient-dashboard.html';
+    }
 }
 
 // Logout function
