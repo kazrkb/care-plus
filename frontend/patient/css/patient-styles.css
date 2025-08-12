@@ -1,0 +1,168 @@
+/* Patient Module Specific Styles */
+
+/* Patient Dashboard Specific */
+.patient-dashboard {
+    background: linear-gradient(135deg, #f0f8ff 0%, #e6f3ff 100%);
+}
+
+.patient-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+}
+
+.patient-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+/* Appointment Booking Specific */
+.booking-step {
+    animation: fadeInUp 0.5s ease;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.specialty-card.selected {
+    border-color: #3b82f6 !important;
+    background-color: #eff6ff !important;
+}
+
+.doctor-card.selected {
+    border-color: #3b82f6 !important;
+    background-color: #eff6ff !important;
+}
+
+.calendar-day.selected {
+    background-color: #3b82f6 !important;
+    color: white !important;
+}
+
+.time-slot.selected {
+    border-color: #3b82f6 !important;
+    background-color: #eff6ff !important;
+}
+
+/* Patient Profile Specific */
+.health-metric {
+    padding: 1rem;
+    border-radius: 8px;
+    background: #f8fafc;
+    border-left: 4px solid #3b82f6;
+}
+
+.health-metric.warning {
+    border-left-color: #f59e0b;
+    background: #fffbeb;
+}
+
+.health-metric.danger {
+    border-left-color: #ef4444;
+    background: #fef2f2;
+}
+
+/* Medical Records Specific */
+.prescription-card {
+    border-left: 4px solid #10b981;
+}
+
+.diet-plan-card {
+    border-left: 4px solid #f59e0b;
+}
+
+.lab-result-card {
+    border-left: 4px solid #3b82f6;
+}
+
+/* Patient Navigation */
+.patient-nav {
+    background: linear-gradient(90deg, #3b82f6 0%, #1e40af 100%);
+}
+
+.patient-nav .nav-link {
+    color: rgba(255, 255, 255, 0.9);
+    transition: color 0.3s ease;
+}
+
+.patient-nav .nav-link:hover {
+    color: white;
+}
+
+.patient-nav .nav-link.active {
+    color: white;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+}
+
+/* Patient Quick Actions */
+.quick-action-btn {
+    background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+    border: none;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+}
+
+.quick-action-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+/* Patient Notifications */
+.patient-notification {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 8px;
+}
+
+.patient-notification.urgent {
+    background: #fef2f2;
+    border-color: #fecaca;
+}
+
+.patient-notification.success {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+}
+
+/* Responsive adjustments for patient module */
+@media (max-width: 768px) {
+    .patient-dashboard {
+        padding: 1rem;
+    }
+    
+    .quick-action-btn {
+        width: 100%;
+        margin-bottom: 0.5rem;
+    }
+    
+    .patient-card {
+        margin-bottom: 1rem;
+    }
+}
+
+/* Patient Theme Colors */
+:root {
+    --patient-primary: #3b82f6;
+    --patient-secondary: #1e40af;
+    --patient-accent: #10b981;
+    --patient-bg: #f8fafc;
+    --patient-card-bg: white;
+    --patient-text: #374151;
+    --patient-text-light: #6b7280;
+}

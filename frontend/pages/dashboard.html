@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patient Dashboard - Care Plus</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#1E40AF',
+                        accent: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-lg border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <h1 class="text-2xl font-bold text-primary">Care<span class="text-accent">Plus</span></h1>
+                    <span class="ml-4 text-gray-600">Patient Portal</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="relative">
+                        <button id="notificationBtn" class="text-gray-600 hover:text-gray-800 relative">
+                            <i class="fas fa-bell text-xl"></i>
+                            <span class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">3</span>
+                        </button>
+                    </div>
+                    <div class="relative">
+                        <button id="profileBtn" class="flex items-center space-x-2 text-gray-700 hover:text-gray-900">
+                            <div class="w-8 h-8 bg-primary text-white rounded-full flex items-center justify-center">
+                                <i class="fas fa-user text-sm"></i>
+                            </div>
+                            <span id="userName">Loading...</span>
+                            <i class="fas fa-chevron-down text-sm"></i>
+                        </button>
+                        
+                        <!-- Profile Dropdown -->
+                        <div id="profileDropdown" class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg hidden z-10">
+                            <div class="py-1">
+                                <a href="profile.html" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                    <i class="fas fa-user mr-2"></i>Profile
+                                </a>
+                                <a href="settings.html" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                    <i class="fas fa-cog mr-2"></i>Settings
+                                </a>
+                                <button onclick="logout()" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                    <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Welcome Section -->
+        <div class="mb-8">
+            <h2 class="text-3xl font-bold text-gray-900 mb-2">Welcome back, <span id="welcomeName">Patient</span>!</h2>
+            <p class="text-gray-600">Here's an overview of your health and upcoming appointments.</p>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center">
+                    <div class="p-2 bg-primary bg-opacity-10 rounded-lg">
+                        <i class="fas fa-calendar-check text-primary text-xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-2xl font-bold text-gray-900" id="upcomingAppointments">1</p>
+                        <p class="text-gray-600">Upcoming Appointments</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center">
+                    <div class="p-2 bg-accent bg-opacity-10 rounded-lg">
+                        <i class="fas fa-pills text-accent text-xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-2xl font-bold text-gray-900" id="activePrescriptions">1</p>
+                        <p class="text-gray-600">Active Prescriptions</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center">
+                    <div class="p-2 bg-warning bg-opacity-10 rounded-lg">
+                        <i class="fas fa-user-nurse text-warning text-xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-2xl font-bold text-gray-900" id="activeCaregiver">1</p>
+                        <p class="text-gray-600">Active Caregiver</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center">
+                    <div class="p-2 bg-secondary bg-opacity-10 rounded-lg">
+                        <i class="fas fa-heartbeat text-secondary text-xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-2xl font-bold text-gray-900" id="healthScore">85</p>
+                        <p class="text-gray-600">Health Score</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Dashboard Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Left Column -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Upcoming Appointments -->
+                <div class="bg-white rounded-lg shadow">
+                    <div class="p-6 border-b border-gray-200">
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-lg font-semibold text-gray-900">Upcoming Appointments</h3>
+                            <a href="appointments.html" class="text-primary hover:text-secondary text-sm">View All</a>
+                        </div>
+                    </div>
+                    <div id="appointmentsList" class="p-6">
+                        <!-- Appointments will be loaded here -->
+                        <div class="flex items-center justify-center py-8">
+                            <i class="fas fa-spinner fa-spin text-2xl text-gray-400"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Medical Records -->
+                <div class="bg-white rounded-lg shadow">
+                    <div class="p-6 border-b border-gray-200">
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-lg font-semibold text-gray-900">Recent Medical Records</h3>
+                            <a href="medical-records.html" class="text-primary hover:text-secondary text-sm">View All</a>
+                        </div>
+                    </div>
+                    <div id="medicalRecordsList" class="p-6">
+                        <!-- Medical records will be loaded here -->
+                        <div class="flex items-center justify-center py-8">
+                            <i class="fas fa-spinner fa-spin text-2xl text-gray-400"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column -->
+            <div class="space-y-6">
+                <!-- Quick Actions -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+                    <div class="space-y-3">
+                        <button onclick="window.location.href='book-appointment.html'" class="w-full bg-primary hover:bg-secondary text-white py-2 px-4 rounded-lg transition duration-300">
+                            <i class="fas fa-calendar-plus mr-2"></i>Book Appointment
+                        </button>
+                        <button onclick="window.location.href='find-caregiver.html'" class="w-full bg-accent hover:bg-green-600 text-white py-2 px-4 rounded-lg transition duration-300">
+                            <i class="fas fa-user-nurse mr-2"></i>Find Caregiver
+                        </button>
+                        <button onclick="window.location.href='medical-records.html'" class="w-full bg-warning hover:bg-yellow-600 text-white py-2 px-4 rounded-lg transition duration-300">
+                            <i class="fas fa-file-medical mr-2"></i>View Records
+                        </button>
+                        <button onclick="window.location.href='profile.html'" class="w-full bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg transition duration-300">
+                            <i class="fas fa-user-edit mr-2"></i>Update Profile
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Health Metrics -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Health Metrics</h3>
+                    <div class="space-y-4" id="healthMetrics">
+                        <!-- Health metrics will be loaded here -->
+                        <div class="flex items-center justify-center py-8">
+                            <i class="fas fa-spinner fa-spin text-2xl text-gray-400"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notifications -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Recent Notifications</h3>
+                    <div class="space-y-3" id="notificationsList">
+                        <!-- Notifications will be loaded here -->
+                        <div class="p-3 bg-blue-50 rounded-lg">
+                            <p class="text-sm text-blue-800">Appointment reminder: Dr. Smith tomorrow at 10:00 AM</p>
+                            <p class="text-xs text-blue-600 mt-1">2 hours ago</p>
+                        </div>
+                        <div class="p-3 bg-green-50 rounded-lg">
+                            <p class="text-sm text-green-800">New prescription added to your records</p>
+                            <p class="text-xs text-green-600 mt-1">1 day ago</p>
+                        </div>
+                        <div class="p-3 bg-yellow-50 rounded-lg">
+                            <p class="text-sm text-yellow-800">Diet plan updated by your nutritionist</p>
+                            <p class="text-xs text-yellow-600 mt-1">3 days ago</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/main.js"></script>
+    <script src="../js/auth.js"></script>
+    <script src="../js/dashboard.js"></script>
+</body>
+</html>
