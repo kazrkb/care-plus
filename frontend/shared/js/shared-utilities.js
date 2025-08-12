@@ -85,7 +85,20 @@ function logout() {
     localStorage.removeItem('patientData');
     currentUser = null;
     isLoggedIn = false;
-    window.location.href = '../../index.html';
+    
+    // Check current location to determine correct path to patient login
+    const currentPath = window.location.pathname;
+    
+    if (currentPath.includes('patient/pages/')) {
+        // Already in patient pages directory
+        window.location.href = 'patient-login.html';
+    } else if (currentPath.includes('patient/')) {
+        // In patient directory, need to go to pages
+        window.location.href = 'pages/patient-login.html';
+    } else {
+        // From main site or other location
+        window.location.href = 'patient/pages/patient-login.html';
+    }
 }
 
 // Show notification
@@ -264,3 +277,19 @@ const PatientManager = {
         }
     }
 };
+
+// Password visibility toggle function
+function togglePasswordVisibility(passwordFieldId, toggleIconId) {
+    const passwordField = document.getElementById(passwordFieldId);
+    const toggleIcon = document.getElementById(toggleIconId);
+    
+    if (passwordField.type === 'password') {
+        passwordField.type = 'text';
+        toggleIcon.classList.remove('fa-eye');
+        toggleIcon.classList.add('fa-eye-slash');
+    } else {
+        passwordField.type = 'password';
+        toggleIcon.classList.remove('fa-eye-slash');
+        toggleIcon.classList.add('fa-eye');
+    }
+}
