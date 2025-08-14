@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Aug 11, 2025 at 06:47 PM
+-- Generation Time: Aug 14, 2025 at 07:02 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -36,7 +36,7 @@ CREATE TABLE `admin` (
 --
 
 INSERT INTO `admin` (`adminID`) VALUES
-(5);
+(26);
 
 -- --------------------------------------------------------
 
@@ -51,15 +51,9 @@ CREATE TABLE `appointment` (
   `appointmentDate` datetime DEFAULT NULL,
   `status` varchar(20) DEFAULT NULL,
   `consultation_link` varchar(255) DEFAULT NULL,
-  `scheduleID` int(11) DEFAULT NULL
+  `scheduleID` int(11) DEFAULT NULL,
+  `notes` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `appointment`
---
-
-INSERT INTO `appointment` (`appointmentID`, `patientID`, `providerID`, `appointmentDate`, `status`, `consultation_link`, `scheduleID`) VALUES
-(1, 1, 2, '2025-08-18 10:00:00', 'Scheduled', 'https://meet.example.com/xyz-abc-123', 1);
 
 -- --------------------------------------------------------
 
@@ -84,7 +78,7 @@ CREATE TABLE `caregiver` (
 --
 
 INSERT INTO `caregiver` (`careGiverID`, `careGiverType`, `certifications`, `dailyRate`, `weeklyRate`, `monthlyRate`, `nidNumber`, `nidCopyURL`, `certificationURL`) VALUES
-(4, 'Physiotherapist', 'Certified Physiotherapist', 100.00, 600.00, 2200.00, '1985123456789', NULL, NULL);
+(25, 'Nurse', 'register RN', 1000.00, 6000.00, 30000.00, '2131231321', NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -102,13 +96,6 @@ CREATE TABLE `caregiverbooking` (
   `totalAmount` decimal(10,2) NOT NULL,
   `status` enum('Scheduled','Active','Completed','Canceled') NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `caregiverbooking`
---
-
-INSERT INTO `caregiverbooking` (`bookingID`, `patientID`, `careGiverID`, `bookingType`, `startDate`, `endDate`, `totalAmount`, `status`) VALUES
-(1, 1, 4, 'Weekly', '2025-08-18', '2025-08-24', 600.00, 'Scheduled');
 
 -- --------------------------------------------------------
 
@@ -145,13 +132,6 @@ CREATE TABLE `dietplan` (
   `endDate` date DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
---
--- Dumping data for table `dietplan`
---
-
-INSERT INTO `dietplan` (`planID`, `appointmentID`, `nutritionistID`, `patientID`, `dietType`, `caloriesPerDay`, `mealGuidelines`, `exerciseGuidelines`, `startDate`, `endDate`) VALUES
-(1, 1, 3, 1, 'Low-Carb', 2000.00, 'Avoid sugar and processed grains. Focus on lean protein and vegetables.', NULL, '2025-08-19', '2025-09-18');
-
 -- --------------------------------------------------------
 
 --
@@ -180,7 +160,8 @@ CREATE TABLE `doctor` (
 --
 
 INSERT INTO `doctor` (`doctorID`, `specialty`, `licNo`, `yearsOfExp`, `consultationFees`, `nidNumber`, `bmdcRegistrationNumber`, `licenseExpiryDate`, `hospital`, `department`, `medicalSchool`, `nidCopyURL`, `bmdcCertURL`, `medicalLicenseURL`) VALUES
-(2, 'Cardiology', 'DOC12345', 10, 150.00, '1990123456789', 'BMDC-9876', '2028-12-31', 'General Hospital', 'Cardiology', 'Dhaka Medical College', NULL, NULL, NULL);
+(24, 'Cardiology', '123-W2', 5, 500.00, '12123131312', '14324234', '2036-01-12', 'Exim Bank hospital', 'cardiology deartment', 'Dhaka Medical', NULL, NULL, NULL),
+(27, 'General Medicine', '3421342', 15, 800.00, '2323123', '3423423', '2025-08-13', 'Islamic Hospital', 'Medicine', 'Dhaka Medical', NULL, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -198,12 +179,17 @@ CREATE TABLE `feedback` (
   `feedbackDate` date DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- --------------------------------------------------------
+
 --
--- Dumping data for table `feedback`
+-- Table structure for table `medicaldocuments`
 --
 
-INSERT INTO `feedback` (`feedbackID`, `appointmentID`, `patientID`, `providerID`, `rating`, `comments`, `feedbackDate`) VALUES
-(1, 1, 1, 2, 5, 'Dr. Smith was very thorough and explained everything clearly.', '2025-08-18');
+CREATE TABLE `medicaldocuments` (
+  `documentID` int(11) NOT NULL,
+  `historyID` int(11) NOT NULL,
+  `documentURL` varchar(255) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -241,7 +227,7 @@ CREATE TABLE `nutritionist` (
 --
 
 INSERT INTO `nutritionist` (`nutritionistID`, `specialty`, `yearsOfExp`, `consultationFees`, `nidNumber`, `degree`, `nidCopyURL`) VALUES
-(3, 'Weight Management', 5, 80.00, '1992123456789', 'MPH in Community Nutrition', NULL);
+(23, 'Public Health Nutrition', 7, 700.00, '13442323', '0', NULL);
 
 -- --------------------------------------------------------
 
@@ -257,13 +243,6 @@ CREATE TABLE `patient` (
   `gender` varchar(10) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
---
--- Dumping data for table `patient`
---
-
-INSERT INTO `patient` (`patientID`, `age`, `height`, `weight`, `gender`) VALUES
-(1, 35, 175.50, 80.20, 'Male');
-
 -- --------------------------------------------------------
 
 --
@@ -275,16 +254,9 @@ CREATE TABLE `patienthistory` (
   `patientID` int(11) DEFAULT NULL,
   `visitDate` date DEFAULT NULL,
   `diagnosis` text DEFAULT NULL,
-  `labResults` text DEFAULT NULL,
-  `healthMetrics` text DEFAULT NULL
+  `labResultsFile` varchar(255) DEFAULT NULL,
+  `medicalHistory` varchar(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `patienthistory`
---
-
-INSERT INTO `patienthistory` (`historyID`, `patientID`, `visitDate`, `diagnosis`, `labResults`, `healthMetrics`) VALUES
-(1, 1, '2025-08-18', 'Hypertension', 'Blood pressure: 140/90 mmHg', 'Weight: 80.2kg');
 
 -- --------------------------------------------------------
 
@@ -302,13 +274,6 @@ CREATE TABLE `prescription` (
   `date` date DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
---
--- Dumping data for table `prescription`
---
-
-INSERT INTO `prescription` (`prescriptionID`, `appointmentID`, `doctorID`, `medicineName`, `dosage`, `instructions`, `date`) VALUES
-(1, 1, 2, 'Aspirin', '81mg', 'Take one tablet daily with food.', '2025-08-18');
-
 -- --------------------------------------------------------
 
 --
@@ -321,7 +286,6 @@ CREATE TABLE `schedule` (
   `availableDate` date DEFAULT NULL,
   `startTime` time DEFAULT NULL,
   `endTime` time DEFAULT NULL,
-  `slotDuration` int(11) DEFAULT NULL,
   `status` varchar(20) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -329,8 +293,15 @@ CREATE TABLE `schedule` (
 -- Dumping data for table `schedule`
 --
 
-INSERT INTO `schedule` (`scheduleID`, `providerID`, `availableDate`, `startTime`, `endTime`, `slotDuration`, `status`) VALUES
-(1, 2, '2025-08-18', '09:00:00', '17:00:00', 30, 'Available');
+INSERT INTO `schedule` (`scheduleID`, `providerID`, `availableDate`, `startTime`, `endTime`, `status`) VALUES
+(2, 24, '2025-08-15', '02:55:00', '05:56:00', 'Available'),
+(4, 24, '2025-08-28', '03:57:00', '04:58:00', 'Available'),
+(5, 24, '2025-08-28', '03:57:00', '04:58:00', 'Rescheduled'),
+(17, 24, '2025-08-12', '04:39:00', '03:39:00', 'Available'),
+(18, 27, '2025-08-21', '06:42:00', '02:46:00', 'Rescheduled'),
+(19, 27, '2025-08-14', '05:43:00', '06:43:00', 'Canceled'),
+(24, 27, '2025-08-18', '17:00:00', '20:00:00', 'Available'),
+(25, 27, '2025-08-21', '04:00:00', '19:00:00', 'Available');
 
 -- --------------------------------------------------------
 
@@ -341,20 +312,12 @@ INSERT INTO `schedule` (`scheduleID`, `providerID`, `availableDate`, `startTime`
 CREATE TABLE `transaction` (
   `transactionID` int(11) NOT NULL,
   `appointmentID` int(11) DEFAULT NULL,
-  `careGiverBookingID` int(11) DEFAULT NULL,
+  `careProviderBookingID` int(11) DEFAULT NULL,
   `amount` decimal(10,2) DEFAULT NULL,
   `transactionType` varchar(20) DEFAULT NULL,
   `status` varchar(20) DEFAULT NULL,
   `timestamp` datetime DEFAULT NULL
 ) ;
-
---
--- Dumping data for table `transaction`
---
-
-INSERT INTO `transaction` (`transactionID`, `appointmentID`, `careGiverBookingID`, `amount`, `transactionType`, `status`, `timestamp`) VALUES
-(1, 1, NULL, 150.00, 'Card', 'Paid', '2025-08-11 22:10:00'),
-(2, NULL, 1, 600.00, 'Mobile Banking', 'Paid', '2025-08-11 22:11:00');
 
 -- --------------------------------------------------------
 
@@ -368,19 +331,20 @@ CREATE TABLE `users` (
   `password` varchar(255) NOT NULL,
   `Name` varchar(100) NOT NULL,
   `contactNo` varchar(20) DEFAULT NULL,
-  `role` enum('Patient','Doctor','Nutritionist','CareGiver','Admin') NOT NULL
+  `role` enum('Patient','Doctor','Nutritionist','CareGiver','Admin') NOT NULL,
+  `profilePhoto` varchar(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `users`
 --
 
-INSERT INTO `users` (`userID`, `email`, `password`, `Name`, `contactNo`, `role`) VALUES
-(1, 'john.doe@email.com', 'hashed_password_1', 'John Doe', '111-222-3333', 'Patient'),
-(2, 'dr.smith@email.com', 'hashed_password_2', 'Alice Smith', '222-333-4444', 'Doctor'),
-(3, 'susan.j@email.com', 'hashed_password_3', 'Susan Jones', '333-444-5555', 'Nutritionist'),
-(4, 'bob.p@email.com', 'hashed_password_4', 'Bob Parker', '444-555-6666', 'CareGiver'),
-(5, 'admin@system.com', 'hashed_password_5', 'Admin User', '555-666-7777', 'Admin');
+INSERT INTO `users` (`userID`, `email`, `password`, `Name`, `contactNo`, `role`, `profilePhoto`) VALUES
+(23, 'n@gmail.com', '$2y$10$gx.JzXM2U1l.PSDImfxUQu./i56vUIKX4CWO8WKv5p6rQ6Z7oi/da', 'Sadia Ahmed', '01222222', 'Nutritionist', 'uploads/1755017853_474554607_2669300239933381_4912127688215262215_n.jpg'),
+(24, 'd@gmail.com', '$2y$10$en0WF2jyoScW2QrGzwuDyOTra8LLfbq98ptnmi2Rht2ttqS9ZG6Bi', 'Maliha Epsy', '08991822112', 'Doctor', 'uploads/1755018046_IMG_20210929_133222.jpg'),
+(25, 'c@gmail.com', '$2y$10$u0cydwtMJwG/M6i4/lTdwuevrKUu5zvafVW9gw.fCTUYWMjtvkSNe', 'Tasdik Ahmed', '134124324', 'CareGiver', 'uploads/1755018590_man.webp'),
+(26, 'a@gmail.com', '$2y$10$9WnNhjzz9y7jerTdcNiCme9vPjOX3ooDpWhcvA8ZMBe/un2.oKB.C', 'Jon Snow', '0131412341', 'Admin', 'uploads/1755018679_BMDC.png'),
+(27, 'dipu@gmail.com', '$2y$10$41l7O3zjGo0FeP84WVSZFu9zscb5Hd.aexzi4/d2vxYOBOC3.q8tC', 'Tawfiq Dipu', '01222222', 'Doctor', 'uploads/1755031306_noise image.webp');
 
 --
 -- Indexes for dumped tables
@@ -448,6 +412,13 @@ ALTER TABLE `feedback`
   ADD KEY `providerID` (`providerID`);
 
 --
+-- Indexes for table `medicaldocuments`
+--
+ALTER TABLE `medicaldocuments`
+  ADD PRIMARY KEY (`documentID`),
+  ADD KEY `historyID` (`historyID`);
+
+--
 -- Indexes for table `notification`
 --
 ALTER TABLE `notification`
@@ -494,7 +465,7 @@ ALTER TABLE `schedule`
 ALTER TABLE `transaction`
   ADD PRIMARY KEY (`transactionID`),
   ADD KEY `appointmentID` (`appointmentID`),
-  ADD KEY `careGiverBookingID` (`careGiverBookingID`);
+  ADD KEY `careGiverBookingID` (`careProviderBookingID`);
 
 --
 -- Indexes for table `users`
@@ -538,6 +509,12 @@ ALTER TABLE `feedback`
   MODIFY `feedbackID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
+-- AUTO_INCREMENT for table `medicaldocuments`
+--
+ALTER TABLE `medicaldocuments`
+  MODIFY `documentID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+
+--
 -- AUTO_INCREMENT for table `notification`
 --
 ALTER TABLE `notification`
@@ -559,7 +536,7 @@ ALTER TABLE `prescription`
 -- AUTO_INCREMENT for table `schedule`
 --
 ALTER TABLE `schedule`
-  MODIFY `scheduleID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `scheduleID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=26;
 
 --
 -- AUTO_INCREMENT for table `transaction`
@@ -571,7 +548,7 @@ ALTER TABLE `transaction`
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `userID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `userID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=28;
 
 --
 -- Constraints for dumped tables
@@ -634,6 +611,12 @@ ALTER TABLE `feedback`
   ADD CONSTRAINT `feedback_ibfk_3` FOREIGN KEY (`providerID`) REFERENCES `users` (`userID`) ON DELETE CASCADE;
 
 --
+-- Constraints for table `medicaldocuments`
+--
+ALTER TABLE `medicaldocuments`
+  ADD CONSTRAINT `medicaldocuments_ibfk_1` FOREIGN KEY (`historyID`) REFERENCES `patienthistory` (`historyID`) ON DELETE CASCADE;
+
+--
 -- Constraints for table `notification`
 --
 ALTER TABLE `notification`
@@ -675,7 +658,7 @@ ALTER TABLE `schedule`
 --
 ALTER TABLE `transaction`
   ADD CONSTRAINT `transaction_ibfk_1` FOREIGN KEY (`appointmentID`) REFERENCES `appointment` (`appointmentID`) ON DELETE CASCADE,
-  ADD CONSTRAINT `transaction_ibfk_2` FOREIGN KEY (`careGiverBookingID`) REFERENCES `caregiverbooking` (`bookingID`) ON DELETE CASCADE;
+  ADD CONSTRAINT `transaction_ibfk_2` FOREIGN KEY (`careProviderBookingID`) REFERENCES `caregiverbooking` (`bookingID`) ON DELETE CASCADE;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
