@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Aug 14, 2025 at 07:02 AM
+-- Generation Time: Aug 16, 2025 at 01:41 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -54,6 +54,16 @@ CREATE TABLE `appointment` (
   `scheduleID` int(11) DEFAULT NULL,
   `notes` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `appointment`
+--
+
+INSERT INTO `appointment` (`appointmentID`, `patientID`, `providerID`, `appointmentDate`, `status`, `consultation_link`, `scheduleID`, `notes`) VALUES
+(3, 30, 24, '2025-08-10 11:00:00', 'Completed', NULL, NULL, 'Consultation for minor skin rash. Prescription was provided.'),
+(4, 31, 27, '2025-08-18 17:30:00', 'Completed', 'https://meet.google.com/xyz-abc-pqr', 24, 'Scheduled video consultation for blood pressure follow-up.'),
+(5, 31, 24, '2025-08-25 09:00:00', 'Scheduled', 'https://meet.google.com/mhq-dkxf-ejh', NULL, 'Requesting a general check-up. Available any morning next week.'),
+(6, 30, 27, '2025-08-21 16:00:00', 'Canceled', NULL, 25, 'Patient canceled due to a personal emergency.');
 
 -- --------------------------------------------------------
 
@@ -243,6 +253,14 @@ CREATE TABLE `patient` (
   `gender` varchar(10) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Dumping data for table `patient`
+--
+
+INSERT INTO `patient` (`patientID`, `age`, `height`, `weight`, `gender`) VALUES
+(30, 24, 160.00, 65.00, 'Female'),
+(31, 58, 180.00, 70.00, 'Male');
+
 -- --------------------------------------------------------
 
 --
@@ -268,11 +286,17 @@ CREATE TABLE `prescription` (
   `prescriptionID` int(11) NOT NULL,
   `appointmentID` int(11) DEFAULT NULL,
   `doctorID` int(11) DEFAULT NULL,
-  `medicineName` varchar(100) DEFAULT NULL,
-  `dosage` varchar(50) DEFAULT NULL,
+  `medicineNames-dosages` varchar(255) DEFAULT NULL,
   `instructions` text DEFAULT NULL,
   `date` date DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `prescription`
+--
+
+INSERT INTO `prescription` (`prescriptionID`, `appointmentID`, `doctorID`, `medicineNames-dosages`, `instructions`, `date`) VALUES
+(2, 4, 27, 'Feza', 'Aa', '2025-08-16');
 
 -- --------------------------------------------------------
 
@@ -294,14 +318,12 @@ CREATE TABLE `schedule` (
 --
 
 INSERT INTO `schedule` (`scheduleID`, `providerID`, `availableDate`, `startTime`, `endTime`, `status`) VALUES
-(2, 24, '2025-08-15', '02:55:00', '05:56:00', 'Available'),
 (4, 24, '2025-08-28', '03:57:00', '04:58:00', 'Available'),
 (5, 24, '2025-08-28', '03:57:00', '04:58:00', 'Rescheduled'),
-(17, 24, '2025-08-12', '04:39:00', '03:39:00', 'Available'),
 (18, 27, '2025-08-21', '06:42:00', '02:46:00', 'Rescheduled'),
-(19, 27, '2025-08-14', '05:43:00', '06:43:00', 'Canceled'),
 (24, 27, '2025-08-18', '17:00:00', '20:00:00', 'Available'),
-(25, 27, '2025-08-21', '04:00:00', '19:00:00', 'Available');
+(25, 27, '2025-08-21', '04:00:00', '19:00:00', 'Available'),
+(26, 24, '2025-08-24', '07:00:00', '21:00:00', 'Available');
 
 -- --------------------------------------------------------
 
@@ -344,7 +366,10 @@ INSERT INTO `users` (`userID`, `email`, `password`, `Name`, `contactNo`, `role`,
 (24, 'd@gmail.com', '$2y$10$en0WF2jyoScW2QrGzwuDyOTra8LLfbq98ptnmi2Rht2ttqS9ZG6Bi', 'Maliha Epsy', '08991822112', 'Doctor', 'uploads/1755018046_IMG_20210929_133222.jpg'),
 (25, 'c@gmail.com', '$2y$10$u0cydwtMJwG/M6i4/lTdwuevrKUu5zvafVW9gw.fCTUYWMjtvkSNe', 'Tasdik Ahmed', '134124324', 'CareGiver', 'uploads/1755018590_man.webp'),
 (26, 'a@gmail.com', '$2y$10$9WnNhjzz9y7jerTdcNiCme9vPjOX3ooDpWhcvA8ZMBe/un2.oKB.C', 'Jon Snow', '0131412341', 'Admin', 'uploads/1755018679_BMDC.png'),
-(27, 'dipu@gmail.com', '$2y$10$41l7O3zjGo0FeP84WVSZFu9zscb5Hd.aexzi4/d2vxYOBOC3.q8tC', 'Tawfiq Dipu', '01222222', 'Doctor', 'uploads/1755031306_noise image.webp');
+(27, 'dipu@gmail.com', '$2y$10$41l7O3zjGo0FeP84WVSZFu9zscb5Hd.aexzi4/d2vxYOBOC3.q8tC', 'Tawfiq Dipu', '01222222', 'Doctor', 'uploads/profile_27_1755297453.webp'),
+(28, 'ra@gmail.com', '$2y$10$13Y0yWZ0no2rpIHNArpSqunErvniOppn4qHleSQU1OaeFOGoiF.vC', 'Rakib', '23123423', 'Doctor', NULL),
+(30, 'p@gmail.com', '$2y$10$XeLwnSVMB5m27Fiu2l0h5urNC.OzlgkrT5k1yQA3IeG4P8/E1c5Pi', 'Parizad Sifa', '01231234231', 'Patient', NULL),
+(31, 'jo@gmail.com', '$2y$10$9njCOMXXwcHmZ11ff3LLyeeP4ECCT2XEJXyWTdBvD4gwmp0DQ5YVe', 'Jolil Mia', '0189288922', 'Patient', 'uploads/1755293488_man.webp');
 
 --
 -- Indexes for dumped tables
@@ -482,7 +507,7 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `appointment`
 --
 ALTER TABLE `appointment`
-  MODIFY `appointmentID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `appointmentID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- AUTO_INCREMENT for table `caregiverbooking`
@@ -530,13 +555,13 @@ ALTER TABLE `patienthistory`
 -- AUTO_INCREMENT for table `prescription`
 --
 ALTER TABLE `prescription`
-  MODIFY `prescriptionID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `prescriptionID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `schedule`
 --
 ALTER TABLE `schedule`
-  MODIFY `scheduleID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=26;
+  MODIFY `scheduleID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=27;
 
 --
 -- AUTO_INCREMENT for table `transaction`
@@ -548,7 +573,7 @@ ALTER TABLE `transaction`
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `userID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=28;
+  MODIFY `userID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=32;
 
 --
 -- Constraints for dumped tables
