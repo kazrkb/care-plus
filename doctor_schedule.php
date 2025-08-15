@@ -21,40 +21,42 @@ if ($conn->connect_error) {
 // Set a default timezone to ensure accurate date comparisons
 date_default_timezone_set('Asia/Dhaka');
 
+// --- (NEW) AUTOMATIC CLEANUP OF PAST SCHEDULES ---
+// NOTE: This runs every time the page loads. For a real application,
+// using a Cron Job is the recommended and more efficient method.
+$cleanupSql = "DELETE FROM schedule WHERE availableDate < CURDATE() OR (availableDate = CURDATE() AND endTime < CURTIME())";
+$conn->query($cleanupSql);
+// We don't need to show a message for this background task.
+
 $doctorID = $_SESSION['userID'];
 $userName = $_SESSION['Name'];
 $userAvatar = strtoupper(substr($userName, 0, 2));
 $errorMsg = "";
 $successMsg = "";
 
-// --- CORRECTED: Handle Delete Request ---
+// --- Handle Delete Request ---
 if (isset($_GET['delete_id'])) {
     $scheduleIdToDelete = $_GET['delete_id'];
     
-    // Start a transaction to ensure data integrity
     $conn->begin_transaction();
-    
     try {
-        // 1. First, update any appointments linked to this schedule to set their scheduleID to NULL
+        // 1. Update linked appointments
         $updateAppointmentsStmt = $conn->prepare("UPDATE appointment SET scheduleID = NULL WHERE scheduleID = ? AND providerID = ?");
         $updateAppointmentsStmt->bind_param("ii", $scheduleIdToDelete, $doctorID);
         $updateAppointmentsStmt->execute();
         $updateAppointmentsStmt->close();
 
-        // 2. Now, it's safe to delete the schedule
+        // 2. Delete the schedule
         $deleteStmt = $conn->prepare("DELETE FROM schedule WHERE scheduleID = ? AND providerID = ?");
         $deleteStmt->bind_param("ii", $scheduleIdToDelete, $doctorID);
         $deleteStmt->execute();
         $deleteStmt->close();
 
-        // If both queries were successful, commit the transaction
         $conn->commit();
-        
         header("Location: doctor_schedule.php?deleted=success");
         exit();
 
     } catch (mysqli_sql_exception $exception) {
-        // If anything went wrong, roll back the transaction
         $conn->rollback();
         $errorMsg = "Failed to delete schedule. It may be in use.";
     }
@@ -66,7 +68,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['add_schedule'])) {
     $availableDate = $_POST['availableDate'];
     $startTime = $_POST['startTime'];
     $endTime = $_POST['endTime'];
-    $status = "Available"; // Status is now always "Available" on creation
+    $status = "Available";
 
     $today = date('Y-m-d');
     if ($availableDate < $today) {
@@ -125,30 +127,31 @@ $conn->close();
 </head>
 <body class="bg-purple-50">
     <div class="flex min-h-screen">
-        <!-- Sidebar -->
         <aside class="w-64 bg-white border-r">
             <div class="p-6">
                 <a href="#" class="text-2xl font-bold text-dark-orchid">CarePlus</a>
             </div>
             <nav class="px-4">
                 <a href="doctorDashboard.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-table-columns w-5"></i><span>Dashboard</span></a>
-                <a href="#" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-regular fa-user w-5"></i><span>My Profile</span></a>
+                <a href="doctorProfile.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-regular fa-user w-5"></i><span>My Profile</span></a>
                 <a href="doctor_schedule.php" class="flex items-center space-x-3 px-4 py-3 bg-purple-100 text-dark-orchid rounded-lg"><i class="fa-solid fa-calendar-days w-5"></i><span>My Schedule</span></a>
+                <a href="consultationInfo.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-laptop-medical w-5"></i><span>Consultations</span></a>
                 <a href="logout.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg mt-8"><i class="fa-solid fa-arrow-right-from-bracket w-5"></i><span>Logout</span></a>
             </nav>
         </aside>
-        <!-- Main Content -->
         <main class="flex-1 p-8">
             <header class="flex justify-between items-center mb-8">
                 <h1 class="text-3xl font-bold text-slate-800">My Schedule</h1>
-                <div class="flex items-center space-x-2">
-                    <div class="w-10 h-10 rounded-full bg-dark-orchid text-white flex items-center justify-center font-bold"><?php echo htmlspecialchars($userAvatar); ?></div>
-                    <p class="font-semibold text-slate-700"><?php echo htmlspecialchars($userName); ?></p>
+                <div class="flex items-center space-x-4">
+                     <div class="text-right">
+                         <p class="font-semibold text-slate-700"><?php echo htmlspecialchars($userName); ?></p>
+                         <p class="text-sm text-gray-500">Doctor</p>
+                    </div>
+                    <div class="w-12 h-12 rounded-full bg-dark-orchid text-white flex items-center justify-center font-bold text-lg"><?php echo htmlspecialchars($userAvatar); ?></div>
                 </div>
             </header>
             
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <!-- Add Availability Form -->
                 <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-orchid-custom h-fit">
                     <h2 class="text-xl font-bold text-gray-800 mb-4">Add New Availability</h2>
                     <?php if ($successMsg): ?>
@@ -178,12 +181,11 @@ $conn->close();
                     </form>
                 </div>
 
-                <!-- My Availability List -->
                 <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-orchid-custom">
                     <h2 class="text-xl font-bold text-gray-800 mb-4">My Availability</h2>
                     <div class="space-y-3">
                         <?php if (empty($schedules)): ?>
-                            <p class="text-gray-500">You have not added any schedules.</p>
+                            <p class="text-gray-500">You have not added any available schedules.</p>
                         <?php else: ?>
                             <?php foreach ($schedules as $schedule): ?>
                                 <div class="flex justify-between items-center p-4 bg-purple-50 rounded-lg">
