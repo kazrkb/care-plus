@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Aug 16, 2025 at 01:41 AM
+-- Generation Time: Aug 17, 2025 at 10:15 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -115,7 +115,7 @@ CREATE TABLE `caregiverbooking` (
 
 CREATE TABLE `careplan` (
   `planID` int(11) NOT NULL,
-  `appointmentID` int(11) DEFAULT NULL,
+  `bookingID` int(11) DEFAULT NULL,
   `careID` int(11) DEFAULT NULL,
   `exercisePlan` text DEFAULT NULL,
   `date` date DEFAULT NULL,
@@ -409,8 +409,8 @@ ALTER TABLE `caregiverbooking`
 --
 ALTER TABLE `careplan`
   ADD PRIMARY KEY (`planID`),
-  ADD KEY `appointmentID` (`appointmentID`),
-  ADD KEY `careID` (`careID`);
+  ADD KEY `careID` (`careID`),
+  ADD KEY `careplan_ibfk_1` (`bookingID`);
 
 --
 -- Indexes for table `dietplan`
@@ -610,7 +610,7 @@ ALTER TABLE `caregiverbooking`
 -- Constraints for table `careplan`
 --
 ALTER TABLE `careplan`
-  ADD CONSTRAINT `careplan_ibfk_1` FOREIGN KEY (`appointmentID`) REFERENCES `appointment` (`appointmentID`) ON DELETE CASCADE,
+  ADD CONSTRAINT `careplan_ibfk_1` FOREIGN KEY (`bookingID`) REFERENCES `caregiverbooking` (`bookingID`) ON DELETE CASCADE,
   ADD CONSTRAINT `careplan_ibfk_2` FOREIGN KEY (`careID`) REFERENCES `caregiver` (`careGiverID`) ON DELETE SET NULL;
 
 --
