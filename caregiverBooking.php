@@ -32,6 +32,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['book_availability_id'
     
     $conn->begin_transaction();
     try {
+        // Step 1: Lock and verify the chosen slot is still available
         $schQuery = "SELECT * FROM caregiver_availability WHERE availabilityID = ? AND status = 'Available' FOR UPDATE";
         $schStmt = $conn->prepare($schQuery);
         $schStmt->bind_param("i", $availabilityID);
@@ -40,23 +41,39 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['book_availability_id'
 
         if ($slotDetails) {
             $careGiverID = $slotDetails['careGiverID'];
+            $bookingType = $slotDetails['bookingType'];
+            $startDate = $slotDetails['startDate'];
+            
+            // Calculate end date from the slot details
+            $endDate = new DateTime($startDate);
+            if ($bookingType == 'Daily') { $endDate->modify('+1 day'); }
+            if ($bookingType == 'Weekly') { $endDate->modify('+7 days'); }
+            if ($bookingType == 'Monthly') { $endDate->modify('+1 month'); }
+            $endDateStr = $endDate->format('Y-m-d');
+
+            // --- (NEW) Validation: Check if the PATIENT has a conflicting booking ---
+            $patientConflictCheck = $conn->prepare("SELECT bookingID FROM caregiverbooking WHERE patientID = ? AND status IN ('Scheduled', 'Active') AND (startDate < ? AND endDate > ?)");
+            $patientConflictCheck->bind_param("iss", $patientID, $endDateStr, $startDate);
+            $patientConflictCheck->execute();
+            if ($patientConflictCheck->get_result()->num_rows > 0) {
+                throw new Exception("You already have another caregiver booking scheduled during this time period.");
+            }
+            $patientConflictCheck->close();
+
+            // All checks passed, proceed with booking
             $rateQuery = $conn->prepare("SELECT dailyRate, weeklyRate, monthlyRate FROM caregiver WHERE careGiverID = ?");
             $rateQuery->bind_param("i", $careGiverID);
             $rateQuery->execute();
             $rates = $rateQuery->get_result()->fetch_assoc();
             
-            $bookingType = $slotDetails['bookingType'];
-            $startDate = $slotDetails['startDate'];
-            $endDate = new DateTime($startDate);
             $totalAmount = 0;
-
-            if ($bookingType == 'Daily') { $endDate->modify('+1 day'); $totalAmount = $rates['dailyRate']; }
-            if ($bookingType == 'Weekly') { $endDate->modify('+7 days'); $totalAmount = $rates['weeklyRate']; }
-            if ($bookingType == 'Monthly') { $endDate->modify('+1 month'); $totalAmount = $rates['monthlyRate']; }
+            if ($bookingType == 'Daily') { $totalAmount = $rates['dailyRate']; }
+            if ($bookingType == 'Weekly') { $totalAmount = $rates['weeklyRate']; }
+            if ($bookingType == 'Monthly') { $totalAmount = $rates['monthlyRate']; }
 
             $sql = "INSERT INTO caregiverbooking (patientID, careGiverID, bookingType, startDate, endDate, totalAmount, status, availabilityID) VALUES (?, ?, ?, ?, ?, ?, 'Scheduled', ?)";
             $stmt = $conn->prepare($sql);
-            $stmt->bind_param("iisssdi", $patientID, $careGiverID, $bookingType, $startDate, $endDate->format('Y-m-d'), $totalAmount, $availabilityID);
+            $stmt->bind_param("iisssdi", $patientID, $careGiverID, $bookingType, $startDate, $endDateStr, $totalAmount, $availabilityID);
             $stmt->execute();
             
             $updateSql = "UPDATE caregiver_availability SET status = 'Booked' WHERE availabilityID = ?";
@@ -75,9 +92,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['book_availability_id'
     }
 }
 
-// --- (CORRECTED) Fetch ALL caregiver data, including rates and certifications ---
+// --- Fetch ALL caregiver data ---
 $caregivers = $conn->query("SELECT u.userID, u.Name, u.profilePhoto, c.* FROM users u JOIN caregiver c ON u.userID = c.careGiverID WHERE u.role = 'CareGiver'")->fetch_all(MYSQLI_ASSOC);
 $availabilities = $conn->query("SELECT * FROM caregiver_availability WHERE status = 'Available' AND startDate >= CURDATE()")->fetch_all(MYSQLI_ASSOC);
+
+// --- (CORRECTED) Group availabilities by caregiver BEFORE the loop for efficiency and to fix the error ---
+$availabilitiesByCareGiver = [];
+foreach ($availabilities as $avail) {
+    $availabilitiesByCareGiver[$avail['careGiverID']][] = $avail;
+}
 
 $conn->close();
 ?>
@@ -124,17 +147,16 @@ $conn->close();
                 <div class="bg-white p-6 rounded-lg shadow-lg flex flex-col">
                     <h3 class="text-lg font-semibold text-slate-800"><?php echo htmlspecialchars($cg['Name']); ?></h3>
                     <p class="text-sm text-purple-600 mb-2"><?php echo htmlspecialchars($cg['careGiverType']); ?></p>
-                    
                     <p class="text-sm text-gray-600 border-t pt-3 mt-3 mb-4">
                         <i class="fa-solid fa-award mr-2 text-gray-400"></i>
                         <strong>Qualifications:</strong> <?php echo htmlspecialchars($cg['certifications']); ?>
                     </p>
-
                     <div class="text-xs text-gray-500 border-t pt-3 mb-4 flex-grow">
                         <p class="font-semibold text-gray-700 mb-2">Available Slots:</p>
                         <div class="space-y-2">
                             <?php
-                                $cgAvailabilities = array_filter($availabilities, fn($a) => $a['careGiverID'] == $cg['userID']);
+                                // (CORRECTED) Use the pre-grouped array for efficiency
+                                $cgAvailabilities = $availabilitiesByCareGiver[$cg['userID']] ?? [];
                                 if (empty($cgAvailabilities)) {
                                     echo '<p class="text-red-500">No available slots.</p>';
                                 } else {
@@ -148,7 +170,6 @@ $conn->close();
                             ?>
                         </div>
                     </div>
-
                     <button onclick='openBookingModal(<?php echo htmlspecialchars(json_encode($cg), ENT_QUOTES, "UTF-8"); ?>)' class="mt-auto w-full bg-dark-orchid text-white py-2 rounded-lg hover:bg-purple-700 transition">View Slots & Book</button>
                 </div>
                 <?php endforeach; ?>
@@ -163,9 +184,7 @@ $conn->close();
                     <h3 class="text-xl font-bold text-slate-800 mb-2">Book <span id="modalCareGiverName"></span></h3>
                     <p class="text-sm text-gray-500 mb-4">Select an available slot below to see the cost and confirm.</p>
                     <input type="hidden" name="careGiverID" id="modalCareGiverID">
-                    
                     <div id="slotsContainer" class="space-y-2 max-h-60 overflow-y-auto border p-3 rounded-md"></div>
-                    
                     <div id="costDisplay" class="bg-gray-50 p-3 rounded-md text-sm mt-4 hidden">
                         <p class="flex justify-between"><span>Service Period:</span> <strong id="periodDisplay">--</strong></p>
                         <p class="flex justify-between mt-1"><span>Total Cost:</span> <strong id="totalAmountDisplay">--</strong></p>
@@ -178,7 +197,6 @@ $conn->close();
             </form>
         </div>
     </div>
-
     <script>
         const modal = document.getElementById('bookingModal');
         const slotsContainer = document.getElementById('slotsContainer');
@@ -222,7 +240,6 @@ $conn->close();
             let endDate = new Date(startDate);
             let amount = 0;
             
-            // Use the globally available currentCareGiver object for rates
             if(bookingType === 'Daily') { amount = parseFloat(currentCareGiver.dailyRate); endDate.setDate(endDate.getDate() + 1); }
             if(bookingType === 'Weekly') { amount = parseFloat(currentCareGiver.weeklyRate); endDate.setDate(endDate.getDate() + 7); }
             if(bookingType === 'Monthly') { amount = parseFloat(currentCareGiver.monthlyRate); endDate.setMonth(endDate.getMonth() + 1); }
