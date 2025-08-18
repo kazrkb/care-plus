@@ -19,36 +19,152 @@ $errorMsg = "";
 
 // Handle form submission for profile update
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    $age = $_POST['age'];
-    $height = $_POST['height'];
-    $weight = $_POST['weight'];
-    $gender = $_POST['gender'];
-
-    // Check if patient record exists
-    $checkQuery = "SELECT patientID FROM Patient WHERE patientID = ?";
-    $checkStmt = $conn->prepare($checkQuery);
-    $checkStmt->bind_param("i", $userID);
-    $checkStmt->execute();
-    $checkResult = $checkStmt->get_result();
-
-    if ($checkResult->num_rows > 0) {
-        // Update existing record
-        $updateQuery = "UPDATE Patient SET age=?, height=?, weight=?, gender=? WHERE patientID=?";
-        $updateStmt = $conn->prepare($updateQuery);
-        $updateStmt->bind_param("iddsi", $age, $height, $weight, $gender, $userID);
+    $updateType = $_POST['update_type'] ?? 'health';
+    
+    if ($updateType === 'personal') {
+        // Handle personal information update
+        $name = trim($_POST['name']);
+        $email = trim($_POST['email']);
+        $contactNo = trim($_POST['contactNo']);
+        $photoPath = null;
+        $photoUploadError = null;
+        
+        // Handle photo removal
+        $removePhoto = isset($_POST['removePhoto']) && $_POST['removePhoto'] === '1';
+        
+        // Handle photo upload
+        if (isset($_FILES['profilePhoto']) && $_FILES['profilePhoto']['error'] === UPLOAD_ERR_OK) {
+            $uploadDir = 'uploads/';
+            $allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+            $maxSize = 5 * 1024 * 1024; // 5MB
+            
+            $fileType = $_FILES['profilePhoto']['type'];
+            $fileSize = $_FILES['profilePhoto']['size'];
+            $fileName = $_FILES['profilePhoto']['name'];
+            $fileExt = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+            
+            // Validate file type
+            if (!in_array($fileType, $allowedTypes)) {
+                $photoUploadError = "Only JPG, PNG, WebP, and GIF files are allowed.";
+            }
+            // Validate file size
+            elseif ($fileSize > $maxSize) {
+                $photoUploadError = "File size must be less than 5MB.";
+            }
+            else {
+                // Generate unique filename
+                $newFileName = 'profile_' . $userID . '_' . time() . '.' . $fileExt;
+                $targetPath = $uploadDir . $newFileName;
+                
+                // Create uploads directory if it doesn't exist
+                if (!is_dir($uploadDir)) {
+                    mkdir($uploadDir, 0777, true);
+                }
+                
+                // Move uploaded file
+                if (move_uploaded_file($_FILES['profilePhoto']['tmp_name'], $targetPath)) {
+                    $photoPath = $targetPath;
+                } else {
+                    $photoUploadError = "Failed to upload photo. Please try again.";
+                }
+            }
+        }
+        
+        // Validate email format
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $errorMsg = "Please enter a valid email address.";
+        } elseif ($photoUploadError) {
+            $errorMsg = $photoUploadError;
+        } else {
+            // Check if email is already taken by another user
+            $emailCheckQuery = "SELECT userID FROM users WHERE email = ? AND userID != ?";
+            $emailCheckStmt = $conn->prepare($emailCheckQuery);
+            $emailCheckStmt->bind_param("si", $email, $userID);
+            $emailCheckStmt->execute();
+            $emailCheckResult = $emailCheckStmt->get_result();
+            
+            if ($emailCheckResult->num_rows > 0) {
+                $errorMsg = "This email address is already taken by another user.";
+            } else {
+                // Update personal information in users table
+                if ($photoPath) {
+                    // Update with new photo
+                    $updateUserQuery = "UPDATE users SET Name=?, email=?, contactNo=?, profilePhoto=? WHERE userID=?";
+                    $updateUserStmt = $conn->prepare($updateUserQuery);
+                    $updateUserStmt->bind_param("ssssi", $name, $email, $contactNo, $photoPath, $userID);
+                } elseif ($removePhoto) {
+                    // Remove photo
+                    $updateUserQuery = "UPDATE users SET Name=?, email=?, contactNo=?, profilePhoto=NULL WHERE userID=?";
+                    $updateUserStmt = $conn->prepare($updateUserQuery);
+                    $updateUserStmt->bind_param("sssi", $name, $email, $contactNo, $userID);
+                } else {
+                    // Update without changing photo
+                    $updateUserQuery = "UPDATE users SET Name=?, email=?, contactNo=? WHERE userID=?";
+                    $updateUserStmt = $conn->prepare($updateUserQuery);
+                    $updateUserStmt->bind_param("sssi", $name, $email, $contactNo, $userID);
+                }
+                
+                if ($updateUserStmt->execute()) {
+                    $message = "Personal information updated successfully!";
+                    if ($photoPath) {
+                        $message .= " Profile photo uploaded.";
+                    } elseif ($removePhoto) {
+                        $message .= " Profile photo removed.";
+                    }
+                    $successMsg = $message;
+                    // Update session name if it was changed
+                    $_SESSION['Name'] = $name;
+                    $userName = $name;
+                    $userAvatar = strtoupper(substr($userName, 0, 2));
+                    
+                    // Refresh user info to get updated photo
+                    $userQuery = "SELECT Name, email, contactNo, profilePhoto FROM Users WHERE userID = ?";
+                    $userStmt = $conn->prepare($userQuery);
+                    $userStmt->bind_param("i", $userID);
+                    $userStmt->execute();
+                    $userResult = $userStmt->get_result();
+                    $userInfo = $userResult->fetch_assoc();
+                } else {
+                    $errorMsg = "Failed to update personal information. Please try again.";
+                }
+                $updateUserStmt->close();
+            }
+            $emailCheckStmt->close();
+        }
     } else {
-        // Insert new record
-        $updateQuery = "INSERT INTO Patient (patientID, age, height, weight, gender) VALUES (?, ?, ?, ?, ?)";
-        $updateStmt = $conn->prepare($updateQuery);
-        $updateStmt->bind_param("iidds", $userID, $age, $height, $weight, $gender);
-    }
+        // Handle health information update
+        $age = $_POST['age'];
+        $height = $_POST['height'];
+        $weight = $_POST['weight'];
+        $gender = $_POST['gender'];
 
-    if ($updateStmt->execute()) {
-        $successMsg = "Profile updated successfully!";
-    } else {
-        $errorMsg = "Failed to update profile. Please try again.";
+        // Check if patient record exists
+        $checkQuery = "SELECT patientID FROM Patient WHERE patientID = ?";
+        $checkStmt = $conn->prepare($checkQuery);
+        $checkStmt->bind_param("i", $userID);
+        $checkStmt->execute();
+        $checkResult = $checkStmt->get_result();
+
+        if ($checkResult->num_rows > 0) {
+            // Update existing record
+            $updateQuery = "UPDATE Patient SET age=?, height=?, weight=?, gender=? WHERE patientID=?";
+            $updateStmt = $conn->prepare($updateQuery);
+            $updateStmt->bind_param("iddsi", $age, $height, $weight, $gender, $userID);
+        } else {
+            // Insert new record
+            $updateQuery = "INSERT INTO Patient (patientID, age, height, weight, gender) VALUES (?, ?, ?, ?, ?)";
+            $updateStmt = $conn->prepare($updateQuery);
+            $updateStmt->bind_param("iidds", $userID, $age, $height, $weight, $gender);
+        }
+
+        if ($updateStmt->execute()) {
+            $successMsg = "Health information updated successfully!";
+        } else {
+            $errorMsg = "Failed to update health information. Please try again.";
+        }
+        $updateStmt->close();
+        $checkStmt->close();
     }
-    $updateStmt->close();
 }
 
 // Get current patient info
@@ -60,7 +176,7 @@ $patientResult = $patientStmt->get_result();
 $patientInfo = $patientResult->fetch_assoc();
 
 // Get user info from Users table
-$userQuery = "SELECT Name, email, contactNo FROM Users WHERE userID = ?";
+$userQuery = "SELECT Name, email, contactNo, profilePhoto FROM Users WHERE userID = ?";
 $userStmt = $conn->prepare($userQuery);
 $userStmt->bind_param("i", $userID);
 $userStmt->execute();
@@ -133,8 +249,14 @@ $conn->close();
                         <p class="font-semibold text-slate-700"><?php echo htmlspecialchars($userName); ?></p>
                         <p class="text-sm text-gray-500">Patient</p>
                     </div>
-                    <div class="w-12 h-12 rounded-full bg-dark-orchid text-white flex items-center justify-center font-bold text-lg">
-                        <?php echo htmlspecialchars($userAvatar); ?>
+                    <div class="w-12 h-12 rounded-full overflow-hidden">
+                        <?php if ($userInfo['profilePhoto'] && file_exists($userInfo['profilePhoto'])): ?>
+                            <img src="<?php echo htmlspecialchars($userInfo['profilePhoto']); ?>" alt="Profile Photo" class="w-full h-full object-cover">
+                        <?php else: ?>
+                            <div class="w-full h-full bg-dark-orchid text-white flex items-center justify-center font-bold text-lg">
+                                <?php echo htmlspecialchars($userAvatar); ?>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 </div>
             </header>
@@ -153,33 +275,71 @@ $conn->close();
             <?php endif; ?>
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <!-- Personal Information (Read-only) -->
+                <!-- Personal Information (Editable) -->
                 <div class="bg-white p-6 rounded-lg shadow-orchid-custom">
                     <h3 class="text-xl font-bold text-slate-800 mb-6">Personal Information</h3>
-                    <div class="space-y-4">
+                    <form method="POST" enctype="multipart/form-data" class="space-y-4">
+                        <input type="hidden" name="update_type" value="personal">
+                        
+                        <!-- Current Profile Photo Display -->
+                        <div class="flex items-center space-x-4 mb-4">
+                            <div class="w-20 h-20 rounded-full overflow-hidden">
+                                <?php if ($userInfo['profilePhoto'] && file_exists($userInfo['profilePhoto'])): ?>
+                                    <img src="<?php echo htmlspecialchars($userInfo['profilePhoto']); ?>" alt="Profile Photo" class="w-full h-full object-cover">
+                                <?php else: ?>
+                                    <div class="w-full h-full bg-dark-orchid text-white flex items-center justify-center font-bold text-2xl">
+                                        <?php echo htmlspecialchars($userAvatar); ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                            <div>
+                                <p class="text-sm font-medium text-gray-700">Current Profile Photo</p>
+                                <p class="text-xs text-gray-500">
+                                    <?php echo $userInfo['profilePhoto'] ? 'Photo uploaded' : 'No photo uploaded'; ?>
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <!-- Profile Photo Upload -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Upload New Profile Photo</label>
+                            <input type="file" name="profilePhoto" accept="image/jpeg,image/png,image/webp,image/gif" class="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                            <p class="text-xs text-gray-500 mt-1">Accepted formats: JPG, PNG, WebP, GIF. Max size: 5MB</p>
+                            
+                            <!-- Remove photo option (only show if user has a photo) -->
+                            <?php if ($userInfo['profilePhoto']): ?>
+                            <div class="mt-2">
+                                <label class="flex items-center space-x-2">
+                                    <input type="checkbox" name="removePhoto" value="1" class="rounded border-gray-300 text-purple-600 focus:ring-purple-500">
+                                    <span class="text-sm text-gray-600">Remove current profile photo</span>
+                                </label>
+                            </div>
+                            <?php endif; ?>
+                        </div>
+                        
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Full Name</label>
-                            <input type="text" value="<?php echo htmlspecialchars($userInfo['Name'] ?? ''); ?>" class="w-full mt-1 p-3 border rounded-lg bg-gray-50" readonly>
+                            <input type="text" name="name" value="<?php echo htmlspecialchars($userInfo['Name'] ?? ''); ?>" class="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" required minlength="2" maxlength="100">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Email</label>
-                            <input type="email" value="<?php echo htmlspecialchars($userInfo['email'] ?? ''); ?>" class="w-full mt-1 p-3 border rounded-lg bg-gray-50" readonly>
+                            <input type="email" name="email" value="<?php echo htmlspecialchars($userInfo['email'] ?? ''); ?>" class="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" required maxlength="100">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Contact Number</label>
-                            <input type="text" value="<?php echo htmlspecialchars($userInfo['contactNo'] ?? ''); ?>" class="w-full mt-1 p-3 border rounded-lg bg-gray-50" readonly>
+                            <input type="tel" name="contactNo" value="<?php echo htmlspecialchars($userInfo['contactNo'] ?? ''); ?>" class="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" maxlength="20" pattern="[0-9+\-\s]+">
                         </div>
-                    </div>
-                    <p class="text-sm text-gray-500 mt-4">
-                        <i class="fa-solid fa-info-circle mr-1"></i>
-                        Contact admin to update personal information
-                    </p>
+                        <button type="submit" class="w-full bg-dark-orchid text-white py-3 rounded-lg hover:bg-purple-700 transition duration-200 font-semibold">
+                            <i class="fa-solid fa-save mr-2"></i>Update Personal Information
+                        </button>
+                    </form>
                 </div>
 
                 <!-- Health Information (Editable) -->
                 <div class="bg-white p-6 rounded-lg shadow-orchid-custom">
                     <h3 class="text-xl font-bold text-slate-800 mb-6">Health Information</h3>
                     <form method="POST" class="space-y-4">
+                        <input type="hidden" name="update_type" value="health">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Age</label>
