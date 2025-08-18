@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Aug 17, 2025 at 10:15 AM
+-- Generation Time: Aug 18, 2025 at 10:13 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -104,8 +104,33 @@ CREATE TABLE `caregiverbooking` (
   `startDate` date NOT NULL,
   `endDate` date NOT NULL,
   `totalAmount` decimal(10,2) NOT NULL,
-  `status` enum('Scheduled','Active','Completed','Canceled') NOT NULL
+  `status` enum('Scheduled','Active','Completed','Canceled') NOT NULL,
+  `availabilityID` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `caregiver_availability`
+--
+
+CREATE TABLE `caregiver_availability` (
+  `availabilityID` int(11) NOT NULL,
+  `careGiverID` int(11) NOT NULL,
+  `startDate` date DEFAULT NULL,
+  `endDate` date DEFAULT NULL,
+  `bookingType` enum('Daily','Weekly','Monthly') NOT NULL,
+  `status` enum('Available','Booked','Canceled') NOT NULL DEFAULT 'Available'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `caregiver_availability`
+--
+
+INSERT INTO `caregiver_availability` (`availabilityID`, `careGiverID`, `startDate`, `endDate`, `bookingType`, `status`) VALUES
+(1, 25, '2025-08-18', '2025-08-28', 'Daily', ''),
+(2, 25, '2025-08-18', '2025-08-21', 'Daily', 'Available'),
+(3, 25, '2025-09-01', '2025-09-30', 'Daily', 'Available');
 
 -- --------------------------------------------------------
 
@@ -364,7 +389,7 @@ CREATE TABLE `users` (
 INSERT INTO `users` (`userID`, `email`, `password`, `Name`, `contactNo`, `role`, `profilePhoto`) VALUES
 (23, 'n@gmail.com', '$2y$10$gx.JzXM2U1l.PSDImfxUQu./i56vUIKX4CWO8WKv5p6rQ6Z7oi/da', 'Sadia Ahmed', '01222222', 'Nutritionist', 'uploads/1755017853_474554607_2669300239933381_4912127688215262215_n.jpg'),
 (24, 'd@gmail.com', '$2y$10$en0WF2jyoScW2QrGzwuDyOTra8LLfbq98ptnmi2Rht2ttqS9ZG6Bi', 'Maliha Epsy', '08991822112', 'Doctor', 'uploads/1755018046_IMG_20210929_133222.jpg'),
-(25, 'c@gmail.com', '$2y$10$u0cydwtMJwG/M6i4/lTdwuevrKUu5zvafVW9gw.fCTUYWMjtvkSNe', 'Tasdik Ahmed', '134124324', 'CareGiver', 'uploads/1755018590_man.webp'),
+(25, 'c@gmail.com', '$2y$10$u0cydwtMJwG/M6i4/lTdwuevrKUu5zvafVW9gw.fCTUYWMjtvkSNe', 'Tasdik Ahmed', '134124324', 'CareGiver', 'uploads/profilePhoto_25_1755499368.png'),
 (26, 'a@gmail.com', '$2y$10$9WnNhjzz9y7jerTdcNiCme9vPjOX3ooDpWhcvA8ZMBe/un2.oKB.C', 'Jon Snow', '0131412341', 'Admin', 'uploads/1755018679_BMDC.png'),
 (27, 'dipu@gmail.com', '$2y$10$41l7O3zjGo0FeP84WVSZFu9zscb5Hd.aexzi4/d2vxYOBOC3.q8tC', 'Tawfiq Dipu', '01222222', 'Doctor', 'uploads/profile_27_1755297453.webp'),
 (28, 'ra@gmail.com', '$2y$10$13Y0yWZ0no2rpIHNArpSqunErvniOppn4qHleSQU1OaeFOGoiF.vC', 'Rakib', '23123423', 'Doctor', NULL),
@@ -402,6 +427,14 @@ ALTER TABLE `caregiver`
 ALTER TABLE `caregiverbooking`
   ADD PRIMARY KEY (`bookingID`),
   ADD KEY `patientID` (`patientID`),
+  ADD KEY `careGiverID` (`careGiverID`),
+  ADD KEY `fk_booking_to_availability` (`availabilityID`);
+
+--
+-- Indexes for table `caregiver_availability`
+--
+ALTER TABLE `caregiver_availability`
+  ADD PRIMARY KEY (`availabilityID`),
   ADD KEY `careGiverID` (`careGiverID`);
 
 --
@@ -516,6 +549,12 @@ ALTER TABLE `caregiverbooking`
   MODIFY `bookingID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
+-- AUTO_INCREMENT for table `caregiver_availability`
+--
+ALTER TABLE `caregiver_availability`
+  MODIFY `availabilityID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+
+--
 -- AUTO_INCREMENT for table `careplan`
 --
 ALTER TABLE `careplan`
@@ -604,7 +643,14 @@ ALTER TABLE `caregiver`
 --
 ALTER TABLE `caregiverbooking`
   ADD CONSTRAINT `caregiverbooking_ibfk_1` FOREIGN KEY (`patientID`) REFERENCES `patient` (`patientID`) ON DELETE CASCADE,
-  ADD CONSTRAINT `caregiverbooking_ibfk_2` FOREIGN KEY (`careGiverID`) REFERENCES `caregiver` (`careGiverID`) ON DELETE CASCADE;
+  ADD CONSTRAINT `caregiverbooking_ibfk_2` FOREIGN KEY (`careGiverID`) REFERENCES `caregiver` (`careGiverID`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_booking_to_availability` FOREIGN KEY (`availabilityID`) REFERENCES `caregiver_availability` (`availabilityID`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+--
+-- Constraints for table `caregiver_availability`
+--
+ALTER TABLE `caregiver_availability`
+  ADD CONSTRAINT `fk_caregiver_availability` FOREIGN KEY (`careGiverID`) REFERENCES `caregiver` (`careGiverID`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `careplan`
