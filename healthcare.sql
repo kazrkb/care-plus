@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Aug 18, 2025 at 10:13 AM
+-- Generation Time: Aug 18, 2025 at 11:37 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -108,6 +108,13 @@ CREATE TABLE `caregiverbooking` (
   `availabilityID` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Dumping data for table `caregiverbooking`
+--
+
+INSERT INTO `caregiverbooking` (`bookingID`, `patientID`, `careGiverID`, `bookingType`, `startDate`, `endDate`, `totalAmount`, `status`, `availabilityID`) VALUES
+(3, 30, 25, 'Daily', '2025-08-18', '2025-08-19', 1000.00, 'Scheduled', 8);
+
 -- --------------------------------------------------------
 
 --
@@ -117,9 +124,9 @@ CREATE TABLE `caregiverbooking` (
 CREATE TABLE `caregiver_availability` (
   `availabilityID` int(11) NOT NULL,
   `careGiverID` int(11) NOT NULL,
+  `bookingType` enum('Daily','Weekly','Monthly') NOT NULL,
   `startDate` date DEFAULT NULL,
   `endDate` date DEFAULT NULL,
-  `bookingType` enum('Daily','Weekly','Monthly') NOT NULL,
   `status` enum('Available','Booked','Canceled') NOT NULL DEFAULT 'Available'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -127,10 +134,11 @@ CREATE TABLE `caregiver_availability` (
 -- Dumping data for table `caregiver_availability`
 --
 
-INSERT INTO `caregiver_availability` (`availabilityID`, `careGiverID`, `startDate`, `endDate`, `bookingType`, `status`) VALUES
-(1, 25, '2025-08-18', '2025-08-28', 'Daily', ''),
-(2, 25, '2025-08-18', '2025-08-21', 'Daily', 'Available'),
-(3, 25, '2025-09-01', '2025-09-30', 'Daily', 'Available');
+INSERT INTO `caregiver_availability` (`availabilityID`, `careGiverID`, `bookingType`, `startDate`, `endDate`, `status`) VALUES
+(1, 25, 'Daily', '2025-08-18', NULL, ''),
+(6, 25, 'Monthly', '2025-08-20', NULL, 'Available'),
+(7, 25, 'Weekly', '2025-10-08', NULL, 'Available'),
+(8, 25, 'Daily', '2025-08-18', NULL, 'Booked');
 
 -- --------------------------------------------------------
 
@@ -546,13 +554,13 @@ ALTER TABLE `appointment`
 -- AUTO_INCREMENT for table `caregiverbooking`
 --
 ALTER TABLE `caregiverbooking`
-  MODIFY `bookingID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `bookingID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `caregiver_availability`
 --
 ALTER TABLE `caregiver_availability`
-  MODIFY `availabilityID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `availabilityID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
 -- AUTO_INCREMENT for table `careplan`

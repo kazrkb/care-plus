@@ -15,22 +15,22 @@ $userAvatar = strtoupper(substr($userName, 0, 2));
 $successMsg = "";
 $errorMsg = "";
 
-// --- AUTOMATIC DELETION OF EXPIRED SLOTS ---
-$cleanupSql = "DELETE FROM caregiver_availability WHERE endDate < CURDATE() AND careGiverID = ?";
+// --- (MODIFIED) AUTOMATIC CLEANUP ---
+// This now deletes any slot that is expired OR has been canceled.
+$cleanupSql = "DELETE FROM caregiver_availability WHERE (startDate < CURDATE() OR status = 'Canceled') AND careGiverID = ?";
 $cleanupStmt = $conn->prepare($cleanupSql);
 $cleanupStmt->bind_param("i", $careGiverID);
 $cleanupStmt->execute();
 $cleanupStmt->close();
 
 
-// --- Handle CANCELING an availability block ---
+// --- Handle CANCELING a slot (This logic remains, but cleanup will remove it on next page load) ---
 if (isset($_GET['cancel_id'])) {
     $availabilityID = (int)$_GET['cancel_id'];
-    // You can only cancel a slot if it's still 'Available'
     $stmt = $conn->prepare("UPDATE caregiver_availability SET status = 'Canceled' WHERE availabilityID = ? AND careGiverID = ? AND status = 'Available'");
     $stmt->bind_param("ii", $availabilityID, $careGiverID);
     if ($stmt->execute() && $stmt->affected_rows > 0) {
-        $successMsg = "Availability slot has been canceled.";
+        $successMsg = "Availability slot has been marked for deletion and will be removed.";
     } else {
         $errorMsg = "Could not cancel this slot. It might already be booked.";
     }
@@ -42,77 +42,49 @@ if (isset($_GET['cancel_id'])) {
 if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['edit_availability'])) {
     $availabilityID = (int)$_POST['availabilityID'];
     $startDate = $_POST['startDate'];
-    $endDate = $_POST['endDate'];
-
-    if (strtotime($endDate) < strtotime($startDate)) {
-        $errorMsg = "End date cannot be before the start date.";
+    $bookingType = $_POST['bookingType'];
+    
+    $sql = "UPDATE caregiver_availability SET startDate = ?, bookingType = ? WHERE availabilityID = ? AND careGiverID = ? AND status = 'Available'";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("ssii", $startDate, $bookingType, $availabilityID, $careGiverID);
+    if ($stmt->execute() && $stmt->affected_rows > 0) {
+        $successMsg = "Availability block updated successfully!";
     } else {
-        // (CORRECTED) Safer validation for overlaps
-        $checkStmt = $conn->prepare("SELECT availabilityID FROM caregiver_availability WHERE careGiverID = ? AND availabilityID != ? AND (startDate <= ? AND endDate >= ?)");
-        $checkStmt->bind_param("iiss", $careGiverID, $availabilityID, $endDate, $startDate);
-        
-        if ($checkStmt->execute()) {
-            $result = $checkStmt->get_result();
-            if ($result->num_rows > 0) {
-                $errorMsg = "The new dates overlap with another one of your availability blocks.";
-            } else {
-                // No overlap, proceed with update, but ONLY if the slot is still 'Available'
-                $sql = "UPDATE caregiver_availability SET startDate = ?, endDate = ? WHERE availabilityID = ? AND careGiverID = ? AND status = 'Available'";
-                $stmt = $conn->prepare($sql);
-                $stmt->bind_param("ssii", $startDate, $endDate, $availabilityID, $careGiverID);
-                if ($stmt->execute() && $stmt->affected_rows > 0) {
-                    $successMsg = "Availability block updated successfully!";
-                } else {
-                    $errorMsg = "Failed to update availability. It may have already been booked.";
-                }
-                $stmt->close();
-            }
-        } else {
-            $errorMsg = "Database validation query failed.";
-        }
-        $checkStmt->close();
+        $errorMsg = "Failed to update availability. It may be booked or an overlap occurred.";
     }
+    $stmt->close();
 }
 
 
 // --- Handle ADDING a new availability block ---
 if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['add_availability'])) {
     $startDate = $_POST['startDate'];
-    $endDate = $_POST['endDate'];
-
-    if (strtotime($endDate) < strtotime($startDate)) {
-        $errorMsg = "End date cannot be before the start date.";
+    $bookingType = $_POST['bookingType'];
+    $status = 'Available';
+    
+    $checkStmt = $conn->prepare("SELECT availabilityID FROM caregiver_availability WHERE careGiverID = ? AND startDate = ? AND status = 'Available'");
+    $checkStmt->bind_param("is", $careGiverID, $startDate);
+    $checkStmt->execute();
+    if ($checkStmt->get_result()->num_rows > 0) {
+        $errorMsg = "You already have an availability slot for this start date.";
     } else {
-        // (CORRECTED) Safer validation for overlaps
-        $checkStmt = $conn->prepare("SELECT availabilityID FROM caregiver_availability WHERE careGiverID = ? AND status = 'Available' AND (startDate <= ? AND endDate >= ?)");
-        $checkStmt->bind_param("iss", $careGiverID, $endDate, $startDate);
-        
-        if ($checkStmt->execute()) {
-            $result = $checkStmt->get_result();
-            if ($result->num_rows > 0) {
-                $errorMsg = "The dates you selected overlap with an existing available block.";
-            } else {
-                $sql = "INSERT INTO caregiver_availability (careGiverID, startDate, endDate, status) VALUES (?, ?, ?, 'Available')";
-                $stmt = $conn->prepare($sql);
-                $stmt->bind_param("iss", $careGiverID, $startDate, $endDate);
-                if ($stmt->execute()) {
-                    $successMsg = "New availability block added successfully!";
-                } else {
-                    $errorMsg = "Failed to add availability.";
-                }
-                $stmt->close();
-            }
+        $sql = "INSERT INTO caregiver_availability (careGiverID, bookingType, startDate, status) VALUES (?, ?, ?, ?)";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("isss", $careGiverID, $bookingType, $startDate, $status); 
+        if ($stmt->execute()) {
+            $successMsg = "New availability slot added successfully!";
         } else {
-            $errorMsg = "Database validation query failed.";
+            $errorMsg = "Failed to add availability.";
         }
-        $checkStmt->close();
+        $stmt->close();
     }
+    $checkStmt->close();
 }
 
 
-// Fetch all of the caregiver's availability blocks
+// --- (MODIFIED) Fetch only the relevant (Available or Booked) slots ---
 $availabilities = [];
-$sql = "SELECT * FROM caregiver_availability WHERE careGiverID = ? ORDER BY startDate ASC";
+$sql = "SELECT * FROM caregiver_availability WHERE careGiverID = ? AND status IN ('Available', 'Booked') ORDER BY startDate ASC";
 $stmt = $conn->prepare($sql);
 $stmt->bind_param("i", $careGiverID);
 $stmt->execute();
@@ -136,7 +108,6 @@ $conn->close();
         body { font-family: 'Inter', sans-serif; }
         .bg-dark-orchid { background-color: #9932CC; }
         .text-dark-orchid { color: #9932CC; }
-        .shadow-orchid-custom { box-shadow: 0 4px 6px -1px rgba(153, 50, 204, 0.1), 0 2px 4px -2px rgba(153, 50, 204, 0.1); }
     </style>
 </head>
 <body class="bg-gray-50">
@@ -153,7 +124,7 @@ $conn->close();
              <header class="flex justify-between items-center mb-8">
                 <div>
                     <h1 class="text-3xl font-bold text-slate-800">Manage Availability</h1>
-                    <p class="text-gray-600 mt-1">Add, edit, or cancel your available date ranges.</p>
+                    <p class="text-gray-600 mt-1">Add your available slots for patients to book.</p>
                 </div>
                  <div class="flex items-center space-x-4">
                     <div class="text-right">
@@ -167,43 +138,54 @@ $conn->close();
             <?php if ($successMsg): ?><div class="mb-6 p-4 bg-green-100 text-green-800 border-l-4 border-green-500 rounded-r-lg" role="alert"><p><strong>Success:</strong> <?php echo $successMsg; ?></p></div><?php endif; ?>
             <?php if ($errorMsg): ?><div class="mb-6 p-4 bg-red-100 text-red-800 border-l-4 border-red-500 rounded-r-lg" role="alert"><p><strong>Error:</strong> <?php echo $errorMsg; ?></p></div><?php endif; ?>
             
-            <div class="bg-white p-6 rounded-xl shadow-orchid-custom mb-8">
-                <h2 class="text-xl font-bold text-gray-800 mb-4">Add New Availability Block</h2>
-                <form action="caregiver_availability.php" method="POST" class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+            <div class="bg-white p-6 rounded-xl shadow-lg mb-8">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">Add New Availability Slot</h2>
+                <form id="addAvailabilityForm" action="caregiver_availability.php" method="POST" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                    <div>
+                        <label for="bookingType" class="block text-sm font-medium text-gray-700">Booking Type</label>
+                        <select id="bookingType" name="bookingType" required class="w-full mt-1 p-2 border border-gray-300 rounded-md">
+                            <option value="Daily">Daily</option>
+                            <option value="Weekly">Weekly</option>
+                            <option value="Monthly">Monthly</option>
+                        </select>
+                    </div>
                     <div>
                         <label for="startDate" class="block text-sm font-medium text-gray-700">Start Date</label>
                         <input type="date" id="startDate" name="startDate" required class="w-full mt-1 p-2 border border-gray-300 rounded-md" min="<?php echo date('Y-m-d'); ?>">
                     </div>
-                    <div>
-                        <label for="endDate" class="block text-sm font-medium text-gray-700">End Date</label>
-                        <input type="date" id="endDate" name="endDate" required class="w-full mt-1 p-2 border border-gray-300 rounded-md" min="<?php echo date('Y-m-d'); ?>">
+                     <div>
+                        <label for="endDateDisplay" class="block text-sm font-medium text-gray-700">End Date (Auto)</label>
+                        <input type="text" id="endDateDisplay" class="w-full mt-1 p-2 border border-gray-200 rounded-md bg-gray-100" readonly>
                     </div>
-                    <button type="submit" name="add_availability" class="w-full py-2 px-4 bg-dark-orchid text-white rounded-md font-semibold hover:bg-purple-700 transition"><i class="fa-solid fa-plus mr-2"></i>Add Block</button>
+                    <button type="submit" name="add_availability" class="w-full py-2 px-4 bg-dark-orchid text-white rounded-md font-semibold hover:bg-purple-700 transition"><i class="fa-solid fa-plus mr-2"></i>Add Slot</button>
                 </form>
             </div>
 
-            <div class="bg-white p-6 rounded-xl shadow-orchid-custom">
-                <h2 class="text-xl font-bold text-gray-800 mb-4">My Availability Blocks</h2>
+            <div class="bg-white p-6 rounded-xl shadow-lg">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">My Availability Slots</h2>
                 <div class="space-y-4">
                     <?php if (empty($availabilities)): ?>
-                        <div class="text-center text-gray-500 py-10 border-2 border-dashed rounded-lg"><i class="fa-solid fa-calendar-xmark fa-3x text-gray-400 mb-3"></i><p>You have not added any availability yet.</p></div>
+                        <div class="text-center text-gray-500 py-10 border-2 border-dashed rounded-lg"><i class="fa-solid fa-calendar-xmark fa-3x text-gray-400 mb-3"></i><p>You have no upcoming availability.</p></div>
                     <?php else: ?>
                         <?php foreach ($availabilities as $slot): ?>
-                             <?php
-                                $statusClass = '';
-                                switch ($slot['status']) {
-                                    case 'Available': $statusClass = 'bg-green-100 text-green-800'; break;
-                                    case 'Booked': $statusClass = 'bg-blue-100 text-blue-800'; break;
-                                    case 'Canceled': $statusClass = 'bg-red-100 text-red-800'; break;
-                                }
-                                $days = (new DateTime($slot['startDate']))->diff(new DateTime($slot['endDate']))->days + 1;
+                            <?php
+                                $statusClass = ($slot['status'] === 'Available') ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800';
+                                $sDate = new DateTime($slot['startDate']);
+                                $eDate = new DateTime($slot['startDate']);
+                                if ($slot['bookingType'] === 'Weekly') $eDate->modify('+6 days');
+                                if ($slot['bookingType'] === 'Monthly') $eDate->modify('+1 month -1 day');
                             ?>
-                            <div class="flex justify-between items-center p-4 rounded-lg border <?php if($slot['status'] !== 'Available') echo 'opacity-60 bg-gray-50'; ?>">
+                            <div class="flex justify-between items-center p-4 rounded-lg border <?php if($slot['status'] === 'Booked') echo 'opacity-60 bg-gray-50'; ?>">
                                 <div class="flex items-center space-x-4">
                                     <i class="fa-solid fa-calendar-check fa-2x <?php echo $slot['status'] === 'Available' ? 'text-purple-500' : 'text-gray-400'; ?>"></i>
                                     <div>
-                                        <p class="font-semibold text-slate-800"><?php echo date("M j, Y", strtotime($slot['startDate'])); ?> &rarr; <?php echo date("M j, Y", strtotime($slot['endDate'])); ?></p>
-                                        <p class="text-sm text-gray-600">Duration: <span class="font-medium"><?php echo $days; ?> day<?php echo ($days > 1) ? 's' : ''; ?></span></p>
+                                        <p class="font-semibold text-slate-800">
+                                            <?php echo $sDate->format("M j, Y"); ?>
+                                            <?php if ($slot['bookingType'] !== 'Daily'): ?>
+                                                &rarr; <?php echo $eDate->format("M j, Y"); ?>
+                                            <?php endif; ?>
+                                        </p>
+                                        <p class="text-sm text-gray-600">Type: <span class="font-medium"><?php echo htmlspecialchars($slot['bookingType']); ?></span></p>
                                     </div>
                                 </div>
                                 <div class="flex items-center space-x-3">
@@ -227,36 +209,61 @@ $conn->close();
                 <input type="hidden" name="edit_availability" value="1">
                 <input type="hidden" name="availabilityID" id="editAvailabilityID">
                 <div class="p-6">
-                    <h3 class="text-xl font-bold text-slate-800 mb-4">Edit Availability Block</h3>
+                    <h3 class="text-xl font-bold text-slate-800 mb-4">Edit Availability Slot</h3>
                     <div class="space-y-4">
+                         <div>
+                            <label for="editBookingType" class="block text-sm font-medium text-gray-700">Booking Type</label>
+                            <select id="editBookingType" name="bookingType" required class="w-full mt-1 p-2 border border-gray-300 rounded-md">
+                                <option value="Daily">Daily</option>
+                                <option value="Weekly">Weekly</option>
+                                <option value="Monthly">Monthly</option>
+                            </select>
+                        </div>
                         <div>
                             <label for="editStartDate" class="block text-sm font-medium text-gray-700">Start Date</label>
                             <input type="date" id="editStartDate" name="startDate" required class="w-full mt-1 p-2 border rounded-md" min="<?php echo date('Y-m-d'); ?>">
-                        </div>
-                        <div>
-                            <label for="editEndDate" class="block text-sm font-medium text-gray-700">End Date</label>
-                            <input type="date" id="editEndDate" name="endDate" required class="w-full mt-1 p-2 border rounded-md" min="<?php echo date('Y-m-d'); ?>">
                         </div>
                     </div>
                 </div>
                 <div class="bg-gray-100 px-6 py-3 flex justify-end space-x-3">
                     <button type="button" onclick="closeEditModal()" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Close</button>
-                    <button type="submit" class="px-4 py-2 bg-dark-orchid text-white rounded-md hover:bg-purple-700">Update Block</button>
+                    <button type="submit" class="px-4 py-2 bg-dark-orchid text-white rounded-md hover:bg-purple-700">Update Slot</button>
                 </div>
             </form>
         </div>
     </div>
 
     <script>
-        const editModal = document.getElementById('editModal');
+        // --- Logic for the ADD form's auto-calculated End Date ---
+        const addBookingType = document.getElementById('bookingType');
+        const addStartDate = document.getElementById('startDate');
+        const addEndDateDisplay = document.getElementById('endDateDisplay');
 
+        function calculateAddEndDate() {
+            if (!addStartDate.value) { addEndDateDisplay.value = ''; return; }
+            const startDate = new Date(addStartDate.value);
+            const bookingType = addBookingType.value;
+            let endDate = new Date(startDate);
+            if (bookingType === 'Weekly') endDate.setDate(startDate.getDate() + 6);
+            if (bookingType === 'Monthly') {
+                endDate.setMonth(startDate.getMonth() + 1);
+                endDate.setDate(endDate.getDate() - 1);
+            }
+            addEndDateDisplay.value = endDate.toLocaleDateString('en-CA');
+        }
+        addBookingType.addEventListener('change', calculateAddEndDate);
+        addStartDate.addEventListener('change', calculateAddEndDate);
+        if (addStartDate.value) { calculateAddEndDate(); } 
+        else { addStartDate.value = new Date().toISOString().split('T')[0]; calculateAddEndDate(); }
+
+        // --- Logic for the EDIT modal ---
+        const editModal = document.getElementById('editModal');
         function openEditModal(slotData) {
             document.getElementById('editAvailabilityID').value = slotData.availabilityID;
             document.getElementById('editStartDate').value = slotData.startDate;
-            document.getElementById('editEndDate').value = slotData.endDate;
+            document.getElementById('editBookingType').value = slotData.bookingType;
             editModal.classList.remove('hidden');
         }
-
         function closeEditModal() {
             editModal.classList.add('hidden');
         }
