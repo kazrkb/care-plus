@@ -107,7 +107,7 @@ $conn->close();
                     <i class="fa-solid fa-hands-holding-child w-5"></i>
                     <span>Caregiver Bookings</span>
                 </a>
-                <a href="#" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
+                <a href="upload_medical_history.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
                     <i class="fa-solid fa-file-medical w-5"></i>
                     <span>Medical History</span>
                 </a>
