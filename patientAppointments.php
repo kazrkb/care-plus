@@ -248,11 +248,6 @@ function formatAppointmentDate($datetime) {
         }
     </style>
     <script>
-        function confirmCancel(appointmentId, providerName, dateTime) {
-            const confirmMsg = `Are you sure you want to cancel your appointment with ${providerName} on ${dateTime}?\n\nThis action cannot be undone.`;
-            return confirm(confirmMsg);
-        }
-
         // Auto-hide success/error messages after 5 seconds
         document.addEventListener('DOMContentLoaded', function() {
             const alerts = document.querySelectorAll('.alert-auto-hide');
@@ -451,10 +446,12 @@ function formatAppointmentDate($datetime) {
                             <?php endif; ?>
                             
                             <?php if (strtotime($appointment['appointmentDate']) > time() && $appointment['status'] != 'Canceled'): ?>
-                            <form method="POST" class="cancel-form" onsubmit="return confirmCancel('<?php echo $appointment['appointmentID']; ?>', '<?php echo htmlspecialchars($appointment['providerName'], ENT_QUOTES); ?>', '<?php echo formatAppointmentDate($appointment['appointmentDate']); ?>');">
+                            <form method="POST" class="cancel-form">
                                 <input type="hidden" name="action" value="cancel">
                                 <input type="hidden" name="appointmentID" value="<?php echo $appointment['appointmentID']; ?>">
-                                <button type="submit" class="cancel-btn px-4 py-2 border border-red-300 text-red-700 rounded-lg text-sm font-medium hover:bg-red-50 transition">
+                                <button type="button" 
+                                        onclick="confirmCancel('<?php echo $appointment['appointmentID']; ?>', '<?php echo htmlspecialchars($appointment['providerName'], ENT_QUOTES); ?>', '<?php echo formatAppointmentDate($appointment['appointmentDate']); ?>')"
+                                        class="cancel-btn px-4 py-2 border border-red-300 text-red-700 rounded-lg text-sm font-medium hover:bg-red-50 transition">
                                     <i class="fa-solid fa-calendar-xmark mr-1"></i>Cancel
                                 </button>
                             </form>
@@ -911,7 +908,98 @@ function formatAppointmentDate($datetime) {
 
         function confirmCancel(appointmentId, providerName, dateTime) {
             const confirmMsg = `Are you sure you want to cancel your appointment with ${providerName} on ${dateTime}?\n\nThis action cannot be undone.`;
-            return confirm(confirmMsg);
+            showCustomConfirm('Cancel Appointment', confirmMsg, () => {
+                // Create a form and submit it for cancellation
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = window.location.href;
+                
+                const actionInput = document.createElement('input');
+                actionInput.type = 'hidden';
+                actionInput.name = 'action';
+                actionInput.value = 'cancel';
+                
+                const appointmentInput = document.createElement('input');
+                appointmentInput.type = 'hidden';
+                appointmentInput.name = 'appointmentID';
+                appointmentInput.value = appointmentId;
+                
+                form.appendChild(actionInput);
+                form.appendChild(appointmentInput);
+                document.body.appendChild(form);
+                form.submit();
+            }, 'cancel');
+            return false; // Prevent default form submission
+        }
+
+        // Custom Modal Functions
+        let confirmCallback = null;
+        let currentModalType = 'warning'; // 'warning', 'success', 'danger'
+
+        function showCustomConfirm(title, message, callback, type = 'warning') {
+            currentModalType = type;
+            
+            const titleElement = document.getElementById('confirmTitle');
+            const messageElement = document.getElementById('confirmMessage');
+            const modalElement = document.getElementById('confirmationModal');
+            
+            if (!titleElement || !messageElement || !modalElement) {
+                console.error('Modal elements not found!');
+                // Fallback to browser confirm for safety
+                if (confirm(message)) {
+                    callback();
+                }
+                return;
+            }
+            
+            titleElement.textContent = title;
+            messageElement.textContent = message;
+            confirmCallback = callback;
+            
+            // Update modal styling based on type (different structure than caregiver modal)
+            const modalIcon = document.querySelector('#confirmationModal .modal-icon');
+            const modalIconContainer = modalIcon ? modalIcon.parentElement : null;
+            const confirmButton = document.getElementById('confirmButton');
+            
+            if (modalIconContainer && modalIcon && confirmButton) {
+                modalIconContainer.className = 'w-12 h-12 rounded-full flex items-center justify-center mr-4';
+                
+                switch(type) {
+                    case 'success':
+                    case 'booking':
+                        modalIconContainer.classList.add('bg-green-100');
+                        modalIcon.className = 'fas fa-check-circle text-green-600 text-xl modal-icon';
+                        confirmButton.className = 'px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition';
+                        break;
+                    case 'danger':
+                    case 'cancel':
+                        modalIconContainer.classList.add('bg-red-100');
+                        modalIcon.className = 'fas fa-exclamation-triangle text-red-600 text-xl modal-icon';
+                        confirmButton.className = 'px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition';
+                        break;
+                    default:
+                        modalIconContainer.classList.add('bg-yellow-100');
+                        modalIcon.className = 'fas fa-exclamation-triangle text-yellow-600 text-xl modal-icon';
+                        confirmButton.className = 'px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition';
+                }
+            }
+            
+            modalElement.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeConfirmModal() {
+            document.getElementById('confirmationModal').classList.add('hidden');
+            document.body.style.overflow = 'auto';
+            confirmCallback = null;
+            currentModalType = 'warning';
+        }
+
+        function confirmAction() {
+            closeConfirmModal();
+            if (confirmCallback) {
+                confirmCallback();
+            }
         }
 
         // Legacy function for backward compatibility
@@ -919,5 +1007,39 @@ function formatAppointmentDate($datetime) {
             openProviderSelectionModal();
         }
     </script>
+
+    <!-- Custom Confirmation Modal -->
+    <div id="confirmationModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg max-w-md w-full transform transition-all">
+                <div class="p-6">
+                    <!-- Modal Header -->
+                    <div class="flex items-center mb-4">
+                        <div class="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mr-4">
+                            <i class="fa-solid fa-exclamation-triangle text-yellow-600 text-xl modal-icon"></i>
+                        </div>
+                        <h3 class="text-lg font-semibold text-gray-900" id="confirmTitle">Confirm Action</h3>
+                    </div>
+                    
+                    <!-- Modal Body -->
+                    <div class="mb-6">
+                        <p class="text-gray-600" id="confirmMessage">Are you sure you want to proceed?</p>
+                    </div>
+                    
+                    <!-- Modal Footer -->
+                    <div class="flex justify-end space-x-3">
+                        <button onclick="closeConfirmModal()" 
+                                class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">
+                            Cancel
+                        </button>
+                        <button onclick="confirmAction()" id="confirmButton"
+                                class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">
+                            Confirm
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

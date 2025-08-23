@@ -340,11 +340,10 @@ function getStatusColor($status) {
                                         </div>
                                         <div class="flex flex-col space-y-2">
                                             <?php if ($booking['status'] === 'Scheduled'): ?>
-                                                <a href="?cancel_booking_id=<?php echo $booking['bookingID']; ?>" 
-                                                   onclick="return confirm('Are you sure you want to cancel this booking?')" 
+                                                <button onclick="confirmCancelBooking(<?php echo $booking['bookingID']; ?>)" 
                                                    class="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition">
                                                     <i class="fa-solid fa-times mr-1"></i>Cancel
-                                                </a>
+                                                </button>
                                             <?php endif; ?>
                                         </div>
                                     </div>
@@ -750,9 +749,19 @@ function getStatusColor($status) {
             
             // Add confirmation on submit
             const form = document.getElementById(`booking-form-${caregiverID}`);
-            form.onsubmit = function(e) {
-                return confirm(`Confirm booking for ${bookingType} service starting ${bookingDate}?\n\nTotal cost: ৳${parseFloat(rate).toLocaleString('en-US', {minimumFractionDigits: 0})}`);
-            };
+            
+            // Remove any existing event listeners to prevent duplicates
+            const newForm = form.cloneNode(true);
+            form.parentNode.replaceChild(newForm, form);
+            
+            newForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const confirmMsg = `Confirm booking for ${bookingType} service starting ${bookingDate}?\n\nTotal cost: ৳${parseFloat(rate).toLocaleString('en-US', {minimumFractionDigits: 0})}`;
+                showCustomConfirm('Confirm Booking', confirmMsg, () => {
+                    newForm.submit();
+                }, 'booking');
+                return false;
+            });
         }
 
         // Set default tab
@@ -779,6 +788,122 @@ function getStatusColor($status) {
                 }, 300);
             }
         }
+
+        // Custom Modal Functions
+        let confirmCallback = null;
+        let currentModalType = 'warning'; // 'warning', 'success', 'danger'
+
+        function showCustomConfirm(title, message, callback, type = 'warning') {
+            currentModalType = type;
+            
+            const titleElement = document.getElementById('confirmTitle');
+            const messageElement = document.getElementById('confirmMessage');
+            const modalElement = document.getElementById('confirmationModal');
+            
+            if (!titleElement || !messageElement || !modalElement) {
+                console.error('Modal elements not found!');
+                // Fallback to browser confirm for safety
+                if (confirm(message)) {
+                    callback();
+                }
+                return;
+            }
+            
+            titleElement.textContent = title;
+            messageElement.textContent = message;
+            confirmCallback = callback;
+            
+            // Update modal styling based on type
+            const modalIcon = document.querySelector('#confirmationModal .modal-icon');
+            const modalIconContainer = modalIcon ? modalIcon.parentElement : null;
+            const confirmButton = document.getElementById('confirmButton');
+            
+            if (modalIconContainer && modalIcon && confirmButton) {
+                modalIconContainer.className = 'flex items-center justify-center w-12 h-12 mx-auto mb-4 rounded-full';
+                
+                switch(type) {
+                    case 'success':
+                    case 'booking':
+                        modalIconContainer.classList.add('bg-green-100');
+                        modalIcon.className = 'fas fa-check-circle text-green-600 text-xl modal-icon';
+                        confirmButton.className = 'px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition';
+                        break;
+                    case 'danger':
+                    case 'cancel':
+                        modalIconContainer.classList.add('bg-red-100');
+                        modalIcon.className = 'fas fa-exclamation-triangle text-red-600 text-xl modal-icon';
+                        confirmButton.className = 'px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition';
+                        break;
+                    default:
+                        modalIconContainer.classList.add('bg-yellow-100');
+                        modalIcon.className = 'fas fa-exclamation-triangle text-yellow-600 text-xl modal-icon';
+                        confirmButton.className = 'px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition';
+                }
+            }
+            
+            modalElement.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeConfirmModal() {
+            document.getElementById('confirmationModal').classList.add('hidden');
+            document.body.style.overflow = 'auto';
+            confirmCallback = null;
+            currentModalType = 'warning';
+        }
+
+        function confirmAction() {
+            closeConfirmModal();
+            if (confirmCallback) {
+                confirmCallback();
+            }
+        }
+
+        function confirmCancelBooking(bookingId) {
+            showCustomConfirm('Cancel Booking', 'Are you sure you want to cancel this booking? This action cannot be undone.', () => {
+                window.location.href = `?cancel_booking_id=${bookingId}`;
+            }, 'cancel');
+        }
     </script>
+
+    <!-- Custom Confirmation Modal -->
+    <div id="confirmationModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <!-- Modal Background -->
+            <div class="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75" onclick="closeConfirmModal()"></div>
+
+            <!-- Modal Content -->
+            <div class="inline-block px-6 pt-5 pb-4 overflow-hidden text-left align-bottom transition-all transform bg-white rounded-lg shadow-xl sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+                
+                <!-- Modal Icon -->
+                <div class="flex items-center justify-center w-12 h-12 mx-auto mb-4 bg-yellow-100 rounded-full">
+                    <i class="fas fa-exclamation-triangle text-yellow-600 text-xl modal-icon"></i>
+                </div>
+                
+                <!-- Modal Header -->
+                <div class="text-center">
+                    <h3 id="confirmTitle" class="text-lg font-medium text-gray-900 mb-2">
+                        Confirm Action
+                    </h3>
+                    <p id="confirmMessage" class="text-sm text-gray-500 mb-6">
+                        Are you sure you want to proceed?
+                    </p>
+                </div>
+                
+                <!-- Modal Footer -->
+                <div class="flex justify-end space-x-3">
+                    <button onclick="closeConfirmModal()" 
+                            class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">
+                        Cancel
+                    </button>
+                    <button onclick="confirmAction()" id="confirmButton"
+                            class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">
+                        Confirm
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>
