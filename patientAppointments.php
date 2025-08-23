@@ -10,14 +10,7 @@ if (!isset($_SESSION['userID']) || $_SESSION['role'] !== 'Patient') {
 // --- Database Connection ---
 $conn = require_once 'config.php';
 
-$userName = $_S                <a href="#" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
-                    <i class="fa-solid fa-hands-holding-child w-5"></i>
-                    <span>My Caregiver Bookings</span>
-                </a>
-                <a href="patientMedicalHistory.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
-                    <i class="fa-solid fa-file-medical w-5"></i>
-                    <span>Medical History</span>
-                </a>Name'];
+$userName = $_SESSION['Name'];
 $userID = $_SESSION['userID'];
 $userAvatar = strtoupper(substr($userName, 0, 2));
 

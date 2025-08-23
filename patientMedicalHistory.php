@@ -43,8 +43,7 @@ $medicalHistory = $historyResult->fetch_all(MYSQLI_ASSOC);
 $prescriptionsQuery = "
     SELECT 
         p.prescriptionID,
-        p.medicineName,
-        p.dosage,
+        p.`medicineNames-dosages` as medicineInfo,
         p.instructions,
         p.date,
         u.Name as doctorName
@@ -313,7 +312,7 @@ function formatDateTime($datetime) {
                             <div class="border border-gray-200 rounded-lg p-4">
                                 <div class="flex justify-between items-start mb-3">
                                     <div>
-                                        <h3 class="font-semibold text-gray-800"><?php echo htmlspecialchars($prescription['medicineName']); ?></h3>
+                                        <h3 class="font-semibold text-gray-800">Medicine & Dosage</h3>
                                         <p class="text-sm text-gray-500">Prescribed by Dr. <?php echo htmlspecialchars($prescription['doctorName']); ?></p>
                                         <p class="text-sm text-gray-500"><?php echo formatDate($prescription['date']); ?></p>
                                     </div>
@@ -321,8 +320,8 @@ function formatDateTime($datetime) {
                                 </div>
                                 
                                 <div class="mb-3">
-                                    <h4 class="font-medium text-gray-700 mb-1">Dosage:</h4>
-                                    <p class="text-gray-600 bg-gray-50 p-2 rounded"><?php echo htmlspecialchars($prescription['dosage']); ?></p>
+                                    <h4 class="font-medium text-gray-700 mb-1">Medicine & Dosage:</h4>
+                                    <p class="text-gray-600 bg-gray-50 p-2 rounded"><?php echo htmlspecialchars($prescription['medicineInfo']); ?></p>
                                 </div>
                                 
                                 <?php if ($prescription['instructions']): ?>
