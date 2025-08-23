@@ -103,11 +103,11 @@ $conn->close();
                     <i class="fa-solid fa-calendar-days w-5"></i>
                     <span>My Appointments</span>
                 </a>
-                <a href="#" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
+                <a href="caregiverBooking.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
                     <i class="fa-solid fa-hands-holding-child w-5"></i>
-                    <span>My Caregiver Bookings</span>
+                    <span>Caregiver Bookings</span>
                 </a>
-                <a href="#" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
+                <a href="patientMedicalHistory.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
                     <i class="fa-solid fa-file-medical w-5"></i>
                     <span>Medical History</span>
                 </a>
@@ -182,12 +182,12 @@ $conn->close();
                         <h3 class="text-lg font-semibold text-slate-800">View Appointments</h3>
                         <p class="text-gray-600 text-sm mt-2">Check your scheduled appointments</p>
                     </a>
-                    <a href="#" class="feature-card bg-white p-6 rounded-lg shadow-orchid-custom text-center hover:shadow-lg">
+                    <a href="caregiverBooking.php" class="feature-card bg-white p-6 rounded-lg shadow-orchid-custom text-center hover:shadow-lg">
                         <i class="fa-solid fa-hands-holding-child fa-2x text-dark-orchid mb-4"></i>
                         <h3 class="text-lg font-semibold text-slate-800">Caregiver Bookings</h3>
                         <p class="text-gray-600 text-sm mt-2">Manage your caregiver services</p>
                     </a>
-                    <a href="#" class="feature-card bg-white p-6 rounded-lg shadow-orchid-custom text-center hover:shadow-lg">
+                    <a href="patientMedicalHistory.php" class="feature-card bg-white p-6 rounded-lg shadow-orchid-custom text-center hover:shadow-lg">
                         <i class="fa-solid fa-file-medical fa-2x text-dark-orchid mb-4"></i>
                         <h3 class="text-lg font-semibold text-slate-800">Medical History</h3>
                         <p class="text-gray-600 text-sm mt-2">Access your medical records</p>

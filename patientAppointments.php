@@ -10,7 +10,14 @@ if (!isset($_SESSION['userID']) || $_SESSION['role'] !== 'Patient') {
 // --- Database Connection ---
 $conn = require_once 'config.php';
 
-$userName = $_SESSION['Name'];
+$userName = $_S                <a href="#" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
+                    <i class="fa-solid fa-hands-holding-child w-5"></i>
+                    <span>My Caregiver Bookings</span>
+                </a>
+                <a href="patientMedicalHistory.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
+                    <i class="fa-solid fa-file-medical w-5"></i>
+                    <span>Medical History</span>
+                </a>Name'];
 $userID = $_SESSION['userID'];
 $userAvatar = strtoupper(substr($userName, 0, 2));
 
@@ -288,7 +295,7 @@ function formatAppointmentDate($datetime) {
                     <i class="fa-solid fa-calendar-days w-5"></i>
                     <span>My Appointments</span>
                 </a>
-                <a href="#" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
+                <a href="my_bookings.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
                     <i class="fa-solid fa-hands-holding-child w-5"></i>
                     <span>My Caregiver Bookings</span>
                 </a>

@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Aug 16, 2025 at 01:41 AM
+-- Generation Time: Aug 21, 2025 at 08:35 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -61,9 +61,12 @@ CREATE TABLE `appointment` (
 
 INSERT INTO `appointment` (`appointmentID`, `patientID`, `providerID`, `appointmentDate`, `status`, `consultation_link`, `scheduleID`, `notes`) VALUES
 (3, 30, 24, '2025-08-10 11:00:00', 'Completed', NULL, NULL, 'Consultation for minor skin rash. Prescription was provided.'),
-(4, 31, 27, '2025-08-18 17:30:00', 'Completed', 'https://meet.google.com/xyz-abc-pqr', 24, 'Scheduled video consultation for blood pressure follow-up.'),
-(5, 31, 24, '2025-08-25 09:00:00', 'Scheduled', 'https://meet.google.com/mhq-dkxf-ejh', NULL, 'Requesting a general check-up. Available any morning next week.'),
-(6, 30, 27, '2025-08-21 16:00:00', 'Canceled', NULL, 25, 'Patient canceled due to a personal emergency.');
+(4, 31, 27, '2025-08-18 17:30:00', 'Completed', 'https://meet.google.com/xyz-abc-pqr', NULL, 'Scheduled video consultation for blood pressure follow-up.'),
+(6, 30, 27, '2025-08-21 16:00:00', 'Canceled', NULL, 25, 'Patient canceled due to a personal emergency.'),
+(8, 31, 24, '2025-09-08 09:30:00', 'Scheduled', 'https://meet.google.com/cju-chtr-xgh', NULL, 'Fever and Cough .'),
+(9, 30, 24, '2025-08-22 10:00:00', 'Scheduled', 'https://meet.google.com/lrz-mhto-wjp', NULL, 'Long term Cough and Cold.'),
+(10, 31, 24, '2025-08-23 17:00:00', 'Scheduled', 'https://meet.google.com/wgq-phvj-koi', NULL, 'Recently feeling chest pain.'),
+(11, 31, 24, '2025-08-23 17:00:00', 'Denied', NULL, NULL, 'Recently feeling chest pain.');
 
 -- --------------------------------------------------------
 
@@ -88,7 +91,8 @@ CREATE TABLE `caregiver` (
 --
 
 INSERT INTO `caregiver` (`careGiverID`, `careGiverType`, `certifications`, `dailyRate`, `weeklyRate`, `monthlyRate`, `nidNumber`, `nidCopyURL`, `certificationURL`) VALUES
-(25, 'Nurse', 'register RN', 1000.00, 6000.00, 30000.00, '2131231321', NULL, NULL);
+(25, 'Nurse', 'register RN', 1000.00, 6000.00, 30000.00, '2131231321', NULL, NULL),
+(32, 'Physiotherapist', 'Cardiovascular and Pulmonary Clinical Specialist', 1500.00, 10000.00, 40000.00, '6456363456', NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -104,8 +108,44 @@ CREATE TABLE `caregiverbooking` (
   `startDate` date NOT NULL,
   `endDate` date NOT NULL,
   `totalAmount` decimal(10,2) NOT NULL,
-  `status` enum('Scheduled','Active','Completed','Canceled') NOT NULL
+  `status` enum('Scheduled','Active','Completed','Canceled') NOT NULL,
+  `availabilityID` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `caregiverbooking`
+--
+
+INSERT INTO `caregiverbooking` (`bookingID`, `patientID`, `careGiverID`, `bookingType`, `startDate`, `endDate`, `totalAmount`, `status`, `availabilityID`) VALUES
+(10, 30, 25, 'Weekly', '2025-10-08', '2025-10-15', 6000.00, 'Scheduled', 7),
+(11, 30, 25, 'Monthly', '2025-08-20', '2025-09-20', 30000.00, 'Canceled', NULL),
+(13, 30, 32, 'Daily', '2025-10-01', '2025-10-02', 1500.00, 'Canceled', 15);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `caregiver_availability`
+--
+
+CREATE TABLE `caregiver_availability` (
+  `availabilityID` int(11) NOT NULL,
+  `careGiverID` int(11) NOT NULL,
+  `bookingType` enum('Daily','Weekly','Monthly') NOT NULL,
+  `startDate` date DEFAULT NULL,
+  `status` enum('Available','Booked','Canceled') NOT NULL DEFAULT 'Available'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `caregiver_availability`
+--
+
+INSERT INTO `caregiver_availability` (`availabilityID`, `careGiverID`, `bookingType`, `startDate`, `status`) VALUES
+(7, 25, 'Weekly', '2025-10-08', 'Booked'),
+(9, 32, 'Weekly', '2025-08-18', 'Available'),
+(13, 25, 'Daily', '2025-10-09', 'Available'),
+(14, 32, 'Monthly', '2025-08-28', 'Available'),
+(15, 32, 'Daily', '2025-10-01', 'Available'),
+(16, 25, 'Daily', '2025-08-21', 'Available');
 
 -- --------------------------------------------------------
 
@@ -115,7 +155,7 @@ CREATE TABLE `caregiverbooking` (
 
 CREATE TABLE `careplan` (
   `planID` int(11) NOT NULL,
-  `appointmentID` int(11) DEFAULT NULL,
+  `bookingID` int(11) DEFAULT NULL,
   `careID` int(11) DEFAULT NULL,
   `exercisePlan` text DEFAULT NULL,
   `date` date DEFAULT NULL,
@@ -201,6 +241,17 @@ CREATE TABLE `medicaldocuments` (
   `documentURL` varchar(255) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Dumping data for table `medicaldocuments`
+--
+
+INSERT INTO `medicaldocuments` (`documentID`, `historyID`, `documentURL`) VALUES
+(1, 1, 'uploads/documents/patient_30_cbc_20250615.pdf'),
+(2, 1, 'uploads/documents/patient_30_xray_chest_20250614.jpg'),
+(3, 2, 'uploads/documents/patient_31_ecg_report_20250722.pdf'),
+(4, 3, 'uploads/documents/patient_30_allergy_panel_20250801.pdf'),
+(5, 5, 'uploads/documents/patient_30_blood_test_20250820.jpg');
+
 -- --------------------------------------------------------
 
 --
@@ -215,6 +266,13 @@ CREATE TABLE `notification` (
   `sentDate` date DEFAULT NULL,
   `status` varchar(20) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `notification`
+--
+
+INSERT INTO `notification` (`notificationID`, `userID`, `type`, `message`, `sentDate`, `status`) VALUES
+(1, 32, 'Booking Canceled', 'Your booking with patient Begum Rukaiya starting on Oct 1, 2025 has been canceled.', '2025-08-18', 'Read');
 
 -- --------------------------------------------------------
 
@@ -276,6 +334,18 @@ CREATE TABLE `patienthistory` (
   `medicalHistory` varchar(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Dumping data for table `patienthistory`
+--
+
+INSERT INTO `patienthistory` (`historyID`, `patientID`, `visitDate`, `diagnosis`, `labResultsFile`, `medicalHistory`) VALUES
+(1, 30, '2025-06-15', 'Seasonal Allergic Rhinitis', 'uploads/lab_reports/patient_30_cbc_20250615.pdf', 'Patient has a history of mild asthma.'),
+(2, 31, '2025-07-22', 'Hypertension (High Blood Pressure)', '\"E:\\Hero\\ca1ffa23209b1afd51ec172f8f6d7962.jpg\"', 'No significant prior medical history. Non-smoker.'),
+(3, 30, '2025-08-01', 'Follow-up on Allergic Rhinitis', 'uploads/lab_reports/patient_30_allergy_panel_20250801.pdf', 'Previous history of mild asthma.'),
+(4, 31, '2025-08-10', 'Type 2 Diabetes Mellitus', NULL, 'Diagnosed with hypertension in July 2025.'),
+(5, 30, '2025-08-20', 'Suspected Iron Deficiency Anemia', 'uploads/lab_reports/patient_30_ferritin_test_20250820.pdf', 'Reports fatigue and dizziness for the past month.'),
+(6, 31, '2025-08-12', 'Fever and body pain', 'uploads/patient_history/primary_31_1755767726_ca1ffa23209b1afd51ec172f8f6d7962.jpg', 'Chikonguniya');
+
 -- --------------------------------------------------------
 
 --
@@ -320,8 +390,6 @@ CREATE TABLE `schedule` (
 INSERT INTO `schedule` (`scheduleID`, `providerID`, `availableDate`, `startTime`, `endTime`, `status`) VALUES
 (4, 24, '2025-08-28', '03:57:00', '04:58:00', 'Available'),
 (5, 24, '2025-08-28', '03:57:00', '04:58:00', 'Rescheduled'),
-(18, 27, '2025-08-21', '06:42:00', '02:46:00', 'Rescheduled'),
-(24, 27, '2025-08-18', '17:00:00', '20:00:00', 'Available'),
 (25, 27, '2025-08-21', '04:00:00', '19:00:00', 'Available'),
 (26, 24, '2025-08-24', '07:00:00', '21:00:00', 'Available');
 
@@ -364,12 +432,13 @@ CREATE TABLE `users` (
 INSERT INTO `users` (`userID`, `email`, `password`, `Name`, `contactNo`, `role`, `profilePhoto`) VALUES
 (23, 'n@gmail.com', '$2y$10$gx.JzXM2U1l.PSDImfxUQu./i56vUIKX4CWO8WKv5p6rQ6Z7oi/da', 'Sadia Ahmed', '01222222', 'Nutritionist', 'uploads/1755017853_474554607_2669300239933381_4912127688215262215_n.jpg'),
 (24, 'd@gmail.com', '$2y$10$en0WF2jyoScW2QrGzwuDyOTra8LLfbq98ptnmi2Rht2ttqS9ZG6Bi', 'Maliha Epsy', '08991822112', 'Doctor', 'uploads/1755018046_IMG_20210929_133222.jpg'),
-(25, 'c@gmail.com', '$2y$10$u0cydwtMJwG/M6i4/lTdwuevrKUu5zvafVW9gw.fCTUYWMjtvkSNe', 'Tasdik Ahmed', '134124324', 'CareGiver', 'uploads/1755018590_man.webp'),
+(25, 'c@gmail.com', '$2y$10$u0cydwtMJwG/M6i4/lTdwuevrKUu5zvafVW9gw.fCTUYWMjtvkSNe', 'Tasdik Ahmed', '134124324', 'CareGiver', 'uploads/profilePhoto_25_1755499368.png'),
 (26, 'a@gmail.com', '$2y$10$9WnNhjzz9y7jerTdcNiCme9vPjOX3ooDpWhcvA8ZMBe/un2.oKB.C', 'Jon Snow', '0131412341', 'Admin', 'uploads/1755018679_BMDC.png'),
 (27, 'dipu@gmail.com', '$2y$10$41l7O3zjGo0FeP84WVSZFu9zscb5Hd.aexzi4/d2vxYOBOC3.q8tC', 'Tawfiq Dipu', '01222222', 'Doctor', 'uploads/profile_27_1755297453.webp'),
 (28, 'ra@gmail.com', '$2y$10$13Y0yWZ0no2rpIHNArpSqunErvniOppn4qHleSQU1OaeFOGoiF.vC', 'Rakib', '23123423', 'Doctor', NULL),
-(30, 'p@gmail.com', '$2y$10$XeLwnSVMB5m27Fiu2l0h5urNC.OzlgkrT5k1yQA3IeG4P8/E1c5Pi', 'Parizad Sifa', '01231234231', 'Patient', NULL),
-(31, 'jo@gmail.com', '$2y$10$9njCOMXXwcHmZ11ff3LLyeeP4ECCT2XEJXyWTdBvD4gwmp0DQ5YVe', 'Jolil Mia', '0189288922', 'Patient', 'uploads/1755293488_man.webp');
+(30, 'p@gmail.com', '$2y$10$XeLwnSVMB5m27Fiu2l0h5urNC.OzlgkrT5k1yQA3IeG4P8/E1c5Pi', 'Begum Rukaiya', '01231234231', 'Patient', NULL),
+(31, 'jo@gmail.com', '$2y$10$9njCOMXXwcHmZ11ff3LLyeeP4ECCT2XEJXyWTdBvD4gwmp0DQ5YVe', 'Jolil Mia', '0189288922', 'Patient', 'uploads/1755293488_man.webp'),
+(32, 'shafi@gmail.com', '$2y$10$6GcxmY4kphlwZURTrd65sunVD2f9/ArgsSynRRwTuhvr23GJ0InC2', 'Shafikur Rahman', '017878788738', 'CareGiver', NULL);
 
 --
 -- Indexes for dumped tables
@@ -402,6 +471,14 @@ ALTER TABLE `caregiver`
 ALTER TABLE `caregiverbooking`
   ADD PRIMARY KEY (`bookingID`),
   ADD KEY `patientID` (`patientID`),
+  ADD KEY `careGiverID` (`careGiverID`),
+  ADD KEY `fk_booking_to_availability` (`availabilityID`);
+
+--
+-- Indexes for table `caregiver_availability`
+--
+ALTER TABLE `caregiver_availability`
+  ADD PRIMARY KEY (`availabilityID`),
   ADD KEY `careGiverID` (`careGiverID`);
 
 --
@@ -409,8 +486,8 @@ ALTER TABLE `caregiverbooking`
 --
 ALTER TABLE `careplan`
   ADD PRIMARY KEY (`planID`),
-  ADD KEY `appointmentID` (`appointmentID`),
-  ADD KEY `careID` (`careID`);
+  ADD KEY `careID` (`careID`),
+  ADD KEY `careplan_ibfk_1` (`bookingID`);
 
 --
 -- Indexes for table `dietplan`
@@ -507,13 +584,19 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `appointment`
 --
 ALTER TABLE `appointment`
-  MODIFY `appointmentID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+  MODIFY `appointmentID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 
 --
 -- AUTO_INCREMENT for table `caregiverbooking`
 --
 ALTER TABLE `caregiverbooking`
-  MODIFY `bookingID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `bookingID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
+
+--
+-- AUTO_INCREMENT for table `caregiver_availability`
+--
+ALTER TABLE `caregiver_availability`
+  MODIFY `availabilityID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
 
 --
 -- AUTO_INCREMENT for table `careplan`
@@ -537,25 +620,25 @@ ALTER TABLE `feedback`
 -- AUTO_INCREMENT for table `medicaldocuments`
 --
 ALTER TABLE `medicaldocuments`
-  MODIFY `documentID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `documentID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT for table `notification`
 --
 ALTER TABLE `notification`
-  MODIFY `notificationID` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `notificationID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT for table `patienthistory`
 --
 ALTER TABLE `patienthistory`
-  MODIFY `historyID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `historyID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT for table `prescription`
 --
 ALTER TABLE `prescription`
-  MODIFY `prescriptionID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `prescriptionID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `schedule`
@@ -573,7 +656,7 @@ ALTER TABLE `transaction`
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `userID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=32;
+  MODIFY `userID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=33;
 
 --
 -- Constraints for dumped tables
@@ -604,13 +687,20 @@ ALTER TABLE `caregiver`
 --
 ALTER TABLE `caregiverbooking`
   ADD CONSTRAINT `caregiverbooking_ibfk_1` FOREIGN KEY (`patientID`) REFERENCES `patient` (`patientID`) ON DELETE CASCADE,
-  ADD CONSTRAINT `caregiverbooking_ibfk_2` FOREIGN KEY (`careGiverID`) REFERENCES `caregiver` (`careGiverID`) ON DELETE CASCADE;
+  ADD CONSTRAINT `caregiverbooking_ibfk_2` FOREIGN KEY (`careGiverID`) REFERENCES `caregiver` (`careGiverID`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_booking_to_availability` FOREIGN KEY (`availabilityID`) REFERENCES `caregiver_availability` (`availabilityID`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+--
+-- Constraints for table `caregiver_availability`
+--
+ALTER TABLE `caregiver_availability`
+  ADD CONSTRAINT `fk_caregiver_availability` FOREIGN KEY (`careGiverID`) REFERENCES `caregiver` (`careGiverID`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `careplan`
 --
 ALTER TABLE `careplan`
-  ADD CONSTRAINT `careplan_ibfk_1` FOREIGN KEY (`appointmentID`) REFERENCES `appointment` (`appointmentID`) ON DELETE CASCADE,
+  ADD CONSTRAINT `careplan_ibfk_1` FOREIGN KEY (`bookingID`) REFERENCES `caregiverbooking` (`bookingID`) ON DELETE CASCADE,
   ADD CONSTRAINT `careplan_ibfk_2` FOREIGN KEY (`careID`) REFERENCES `caregiver` (`careGiverID`) ON DELETE SET NULL;
 
 --
