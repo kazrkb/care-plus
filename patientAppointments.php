@@ -157,9 +157,6 @@ $providersStmt = $conn->prepare($providersQuery);
 $providersStmt->execute();
 $providers = $providersStmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
-// Debug: Check what providers were fetched
-error_log("Providers fetched: " . print_r($providers, true));
-
 $conn->close();
 
 // Generate time slots (9 AM to 5 PM)
@@ -253,14 +250,6 @@ function formatAppointmentDate($datetime) {
     <script>
         // Auto-hide success/error messages after 5 seconds
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('Page loaded, checking modal elements...');
-            const providerModal = document.getElementById('providerSelectionModal');
-            const confirmModal = document.getElementById('confirmationModal');
-            console.log('Modal elements found:', {
-                providerModal: !!providerModal,
-                confirmModal: !!confirmModal
-            });
-            
             const alerts = document.querySelectorAll('.alert-auto-hide');
             alerts.forEach(function(alert) {
                 setTimeout(function() {
@@ -724,7 +713,6 @@ function formatAppointmentDate($datetime) {
 
         // Provider Selection Modal Functions
         function openProviderSelectionModal() {
-            console.log('Opening provider selection modal...');
             const modal = document.getElementById('providerSelectionModal');
             if (!modal) {
                 console.error('Provider selection modal not found!');
@@ -733,7 +721,6 @@ function formatAppointmentDate($datetime) {
             modal.classList.remove('hidden');
             document.body.style.overflow = 'hidden';
             clearProviderFilters();
-            console.log('Provider selection modal should now be visible');
         }
 
         function closeProviderSelectionModal() {
