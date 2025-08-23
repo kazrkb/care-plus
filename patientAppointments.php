@@ -139,12 +139,13 @@ $countsStmt->bind_param("i", $userID);
 $countsStmt->execute();
 $counts = $countsStmt->get_result()->fetch_assoc();
 
-// Get available providers (doctors and nutritionists)
+// Get available providers (doctors and nutritionists) with their schedules
 $providersQuery = "
-    SELECT u.userID, u.Name, u.role, d.specialty, d.consultationFees, 'Doctor' as provider_type
+    SELECT DISTINCT u.userID, u.Name, u.role, d.specialty, d.consultationFees, 'Doctor' as provider_type
     FROM users u 
     JOIN doctor d ON u.userID = d.doctorID 
-    WHERE u.role = 'Doctor'
+    LEFT JOIN schedule s ON u.userID = s.providerID 
+    WHERE u.role = 'Doctor' AND (s.scheduleID IS NULL OR s.availableDate >= CURDATE())
     UNION
     SELECT u.userID, u.Name, u.role, n.specialty, n.consultationFees, 'Nutritionist' as provider_type
     FROM users u 
@@ -156,6 +157,16 @@ $providersQuery = "
 $providersStmt = $conn->prepare($providersQuery);
 $providersStmt->execute();
 $providers = $providersStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+// Get available schedules for dynamic time slot generation
+$schedulesQuery = "SELECT providerID, availableDate, startTime, endTime FROM schedule WHERE availableDate >= CURDATE() AND status = 'Available'";
+$schedulesResult = $conn->query($schedulesQuery);
+$schedules = [];
+if ($schedulesResult) {
+    while ($row = $schedulesResult->fetch_assoc()) {
+        $schedules[$row['providerID']][] = $row;
+    }
+}
 
 $conn->close();
 
@@ -666,19 +677,20 @@ function formatAppointmentDate($datetime) {
                                        min="<?php echo date('Y-m-d', strtotime('+1 day')); ?>"
                                        max="<?php echo date('Y-m-d', strtotime('+30 days')); ?>"
                                        class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" 
-                                       required onchange="checkAppointmentFormValidity()">
+                                       required onchange="updateAvailableTimeSlots(); checkAppointmentFormValidity()">
                             </div>
                             
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Preferred Time</label>
-                                <select name="appointmentTime" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" required onchange="checkAppointmentFormValidity()">
-                                    <option value="">Select time</option>
-                                    <?php foreach ($timeSlots as $slot): ?>
-                                    <option value="<?php echo $slot; ?>">
-                                        <?php echo date('g:i A', strtotime($slot)); ?>
-                                    </option>
-                                    <?php endforeach; ?>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Available Time</label>
+                                <select name="appointmentTime" id="appointmentTimeSelect" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" required onchange="checkAppointmentFormValidity()">
+                                    <option value="">First select a date</option>
                                 </select>
+                                <div id="no-slots-message" class="hidden mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                    <p class="text-sm text-yellow-800">
+                                        <i class="fa-solid fa-exclamation-triangle mr-2"></i>
+                                        No available time slots for selected date. Please choose another date or contact the provider directly.
+                                    </p>
+                                </div>
                             </div>
                         </div>
 
@@ -710,6 +722,10 @@ function formatAppointmentDate($datetime) {
 
     <script>
         let selectedProvider = null;
+        
+        // Pass PHP schedules data to JavaScript
+        const doctorSchedules = <?php echo json_encode($schedules); ?>;
+        console.log('Doctor schedules loaded:', doctorSchedules);
 
         // Provider Selection Modal Functions
         function openProviderSelectionModal() {
@@ -818,6 +834,10 @@ function formatAppointmentDate($datetime) {
             if (appointmentModal) {
                 appointmentModal.classList.remove('hidden');
                 document.body.style.overflow = 'hidden';
+                
+                // Update available time slots when modal opens
+                updateAvailableTimeSlots();
+                
                 console.log('Appointment booking modal should now be visible');
             } else {
                 console.error('Appointment booking modal not found!');
@@ -933,6 +953,98 @@ function formatAppointmentDate($datetime) {
             } else {
                 console.log('Form is invalid, submit button disabled');
             }
+        }
+
+        function updateAvailableTimeSlots() {
+            const selectedDate = document.querySelector('input[name="appointmentDate"]').value;
+            const timeSelect = document.getElementById('appointmentTimeSelect');
+            const noSlotsMessage = document.getElementById('no-slots-message');
+            
+            if (!selectedDate || !selectedProvider) {
+                timeSelect.innerHTML = '<option value="">Please select a date</option>';
+                return;
+            }
+            
+            console.log('Updating time slots for:', { selectedDate, providerId: selectedProvider.id });
+            
+            // Clear previous options
+            timeSelect.innerHTML = '<option value="">Loading available times...</option>';
+            noSlotsMessage.classList.add('hidden');
+            
+            // If it's a nutritionist, show default time slots (they don't use schedule system)
+            if (selectedProvider.role === 'Nutritionist') {
+                const defaultTimeSlots = [
+                    '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
+                    '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00'
+                ];
+                
+                timeSelect.innerHTML = '<option value="">Select time</option>';
+                defaultTimeSlots.forEach(slot => {
+                    const option = document.createElement('option');
+                    option.value = slot;
+                    option.textContent = formatTime(slot);
+                    timeSelect.appendChild(option);
+                });
+                return;
+            }
+            
+            // For doctors, check their schedule
+            const providerId = selectedProvider.id;
+            const schedules = doctorSchedules[providerId] || [];
+            
+            console.log('Available schedules for provider:', schedules);
+            
+            // Find schedules for the selected date
+            const dateSchedules = schedules.filter(schedule => schedule.availableDate === selectedDate);
+            
+            if (dateSchedules.length === 0) {
+                timeSelect.innerHTML = '<option value="">No available slots</option>';
+                noSlotsMessage.classList.remove('hidden');
+                return;
+            }
+            
+            // Generate time slots based on doctor's schedule
+            timeSelect.innerHTML = '<option value="">Select time</option>';
+            let hasSlots = false;
+            
+            dateSchedules.forEach(schedule => {
+                const slots = generateTimeSlotsFromSchedule(schedule.startTime, schedule.endTime);
+                slots.forEach(slot => {
+                    const option = document.createElement('option');
+                    option.value = slot;
+                    option.textContent = formatTime(slot);
+                    timeSelect.appendChild(option);
+                    hasSlots = true;
+                });
+            });
+            
+            if (!hasSlots) {
+                timeSelect.innerHTML = '<option value="">No available slots</option>';
+                noSlotsMessage.classList.remove('hidden');
+            }
+        }
+        
+        function generateTimeSlotsFromSchedule(startTime, endTime) {
+            const slots = [];
+            const start = new Date('2000-01-01 ' + startTime);
+            const end = new Date('2000-01-01 ' + endTime);
+            
+            while (start < end) {
+                const timeString = start.toTimeString().slice(0, 5);
+                slots.push(timeString);
+                start.setMinutes(start.getMinutes() + 30); // 30-minute intervals
+            }
+            
+            return slots;
+        }
+        
+        function formatTime(timeString) {
+            const time = new Date('2000-01-01 ' + timeString);
+            return time.toLocaleTimeString('en-US', { 
+                hour: 'numeric', 
+                minute: '2-digit',
+                hour12: true 
+            });
         }
 
         // Event Listeners
