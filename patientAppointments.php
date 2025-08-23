@@ -989,16 +989,22 @@ function formatAppointmentDate($datetime) {
         }
 
         function closeConfirmModal() {
-            document.getElementById('confirmationModal').classList.add('hidden');
-            document.body.style.overflow = 'auto';
+            const modalElement = document.getElementById('confirmationModal');
+            if (modalElement) {
+                modalElement.classList.add('hidden');
+                document.body.style.overflow = 'auto';
+            }
             confirmCallback = null;
             currentModalType = 'warning';
         }
 
         function confirmAction() {
-            closeConfirmModal();
-            if (confirmCallback) {
-                confirmCallback();
+            if (confirmCallback && typeof confirmCallback === 'function') {
+                const callback = confirmCallback;
+                closeConfirmModal();
+                callback();
+            } else {
+                closeConfirmModal();
             }
         }
 

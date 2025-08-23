@@ -237,10 +237,6 @@ function getStatusColor($status) {
         </aside>
 
         <main class="flex-1 p-8">
-            <!-- Debug Button for Testing -->
-            <button onclick="showCustomConfirm('Test Modal', 'This is a test modal to check functionality.', () => { console.log('Modal callback works!'); }, 'booking')" 
-                    class="mb-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Test Modal</button>
-            
             <!-- Header -->
             <header class="flex justify-between items-center mb-8">
                 <div>
@@ -774,20 +770,6 @@ function getStatusColor($status) {
         document.addEventListener('DOMContentLoaded', function() {
             showTab('my-bookings');
             
-            // Debug: Test modal functionality
-            console.log('Page loaded, testing modal elements...');
-            const modal = document.getElementById('confirmationModal');
-            const confirmTitle = document.getElementById('confirmTitle');
-            const confirmMessage = document.getElementById('confirmMessage');
-            const confirmButton = document.getElementById('confirmButton');
-            
-            console.log('Modal elements found:', {
-                modal: !!modal,
-                confirmTitle: !!confirmTitle,
-                confirmMessage: !!confirmMessage,
-                confirmButton: !!confirmButton
-            });
-            
             // Auto-dismiss notifications after 2 seconds
             const notifications = document.querySelectorAll('.alert-notification');
             notifications.forEach(function(notification) {
@@ -814,19 +796,14 @@ function getStatusColor($status) {
         let currentModalType = 'warning'; // 'warning', 'success', 'danger'
 
         function showCustomConfirm(title, message, callback, type = 'warning') {
-            console.log('showCustomConfirm called:', { title, message, type });
-            
             currentModalType = type;
             
             const titleElement = document.getElementById('confirmTitle');
             const messageElement = document.getElementById('confirmMessage');
             const modalElement = document.getElementById('confirmationModal');
             
-            console.log('Modal elements:', { titleElement, messageElement, modalElement });
-            
             if (!titleElement || !messageElement || !modalElement) {
                 console.error('Modal elements not found! Falling back to browser confirm.');
-                // Fallback to browser confirm for safety
                 if (confirm(message)) {
                     callback();
                 }
@@ -837,10 +814,36 @@ function getStatusColor($status) {
             messageElement.textContent = message;
             confirmCallback = callback;
             
-            console.log('About to show modal...');
+            // Update modal styling based on type
+            const modalIcon = document.querySelector('#confirmationModal .modal-icon');
+            const modalIconContainer = modalIcon ? modalIcon.parentElement : null;
+            const confirmButton = document.getElementById('confirmButton');
+            
+            if (modalIconContainer && modalIcon && confirmButton) {
+                modalIconContainer.className = 'flex items-center justify-center w-12 h-12 mx-auto mb-4 rounded-full';
+                
+                switch(type) {
+                    case 'success':
+                    case 'booking':
+                        modalIconContainer.classList.add('bg-green-100');
+                        modalIcon.className = 'fas fa-check-circle text-green-600 text-xl modal-icon';
+                        confirmButton.className = 'px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition';
+                        break;
+                    case 'danger':
+                    case 'cancel':
+                        modalIconContainer.classList.add('bg-red-100');
+                        modalIcon.className = 'fas fa-exclamation-triangle text-red-600 text-xl modal-icon';
+                        confirmButton.className = 'px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition';
+                        break;
+                    default:
+                        modalIconContainer.classList.add('bg-yellow-100');
+                        modalIcon.className = 'fas fa-exclamation-triangle text-yellow-600 text-xl modal-icon';
+                        confirmButton.className = 'px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition';
+                }
+            }
+            
             modalElement.classList.remove('hidden');
             document.body.style.overflow = 'hidden';
-            console.log('Modal should now be visible');
         }
 
         function closeConfirmModal() {
@@ -859,7 +862,6 @@ function getStatusColor($status) {
                 closeConfirmModal();
                 callback();
             } else {
-                console.error('No valid callback function found');
                 closeConfirmModal();
             }
         }
