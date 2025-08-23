@@ -308,10 +308,6 @@ function formatAppointmentDate($datetime) {
 
         <!-- Main Content -->
         <main class="flex-1 p-8">
-            <!-- Debug Button for Testing Provider Modal -->
-            <button onclick="openProviderSelectionModal()" 
-                    class="mb-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Test Provider Modal</button>
-            
             <!-- Header -->
             <header class="flex justify-between items-center mb-8">
                 <div>
@@ -734,42 +730,65 @@ function formatAppointmentDate($datetime) {
         }
 
         function selectProviderForAppointment(providerID, providerName, providerRole) {
+            console.log('Selecting provider:', { providerID, providerName, providerRole });
+            
             // Remove previous selections
             document.querySelectorAll('.provider-card').forEach(card => {
                 card.classList.remove('bg-purple-50', 'border-purple-500');
                 card.classList.add('border-gray-200');
-                card.querySelector('.provider-selection-indicator').classList.add('hidden');
+                const indicator = card.querySelector('.provider-selection-indicator');
+                if (indicator) indicator.classList.add('hidden');
             });
             
-            // Add selection to clicked card
-            const clickedCard = event.currentTarget;
-            clickedCard.classList.add('bg-purple-50', 'border-purple-500');
-            clickedCard.classList.remove('border-gray-200');
-            clickedCard.querySelector('.provider-selection-indicator').classList.remove('hidden');
-            
-            // Store selected provider
-            const specialty = clickedCard.dataset.specialty;
-            const fee = clickedCard.dataset.fee;
-            
-            selectedProvider = {
-                id: providerID,
-                name: providerName,
-                role: providerRole,
-                specialty: specialty,
-                fee: fee
-            };
+            // Find and highlight the selected card
+            const clickedCard = document.querySelector(`.provider-card[onclick*="${providerID}"]`);
+            if (clickedCard) {
+                clickedCard.classList.add('bg-purple-50', 'border-purple-500');
+                clickedCard.classList.remove('border-gray-200');
+                const indicator = clickedCard.querySelector('.provider-selection-indicator');
+                if (indicator) indicator.classList.remove('hidden');
+                
+                // Store selected provider
+                const specialty = clickedCard.dataset.specialty || clickedCard.querySelector('.text-gray-600')?.textContent || '';
+                const fee = clickedCard.dataset.fee || clickedCard.querySelector('.font-bold')?.textContent.replace(/[^\d]/g, '') || '0';
+                
+                selectedProvider = {
+                    id: providerID,
+                    name: providerName,
+                    role: providerRole,
+                    specialty: specialty,
+                    fee: fee
+                };
+                
+                console.log('Selected provider stored:', selectedProvider);
+            } else {
+                console.error('Provider card not found for ID:', providerID);
+            }
             
             // Update UI
             const info = document.getElementById('selected-provider-info');
             const details = document.getElementById('selected-provider-details');
-            details.innerHTML = `Selected: <strong>${providerName}</strong> (${providerRole})`;
-            info.classList.remove('hidden');
+            if (info && details) {
+                details.innerHTML = `Selected: <strong>${providerName}</strong> (${providerRole})`;
+                info.classList.remove('hidden');
+            }
             
-            document.getElementById('proceed-btn').disabled = false;
+            const proceedBtn = document.getElementById('proceed-btn');
+            if (proceedBtn) {
+                proceedBtn.disabled = false;
+                console.log('Proceed button enabled');
+            } else {
+                console.error('Proceed button not found!');
+            }
         }
 
         function proceedToAppointmentBooking() {
-            if (!selectedProvider) return;
+            console.log('Proceeding to appointment booking, selected provider:', selectedProvider);
+            
+            if (!selectedProvider) {
+                console.error('No provider selected!');
+                return;
+            }
             
             // Close provider selection modal
             closeProviderSelectionModal();
@@ -790,8 +809,14 @@ function formatAppointmentDate($datetime) {
             }
             
             // Open appointment booking modal
-            document.getElementById('appointmentBookingModal').classList.remove('hidden');
-            document.body.style.overflow = 'hidden';
+            const appointmentModal = document.getElementById('appointmentBookingModal');
+            if (appointmentModal) {
+                appointmentModal.classList.remove('hidden');
+                document.body.style.overflow = 'hidden';
+                console.log('Appointment booking modal should now be visible');
+            } else {
+                console.error('Appointment booking modal not found!');
+            }
         }
 
         function backToProviderSelection() {
@@ -882,11 +907,27 @@ function formatAppointmentDate($datetime) {
         }
 
         function checkAppointmentFormValidity() {
-            const dateSelected = document.querySelector('input[name="appointmentDate"]').value !== '';
-            const timeSelected = document.querySelector('select[name="appointmentTime"]').value !== '';
-            
+            const dateInput = document.querySelector('input[name="appointmentDate"]');
+            const timeSelect = document.querySelector('select[name="appointmentTime"]');
             const submitBtn = document.getElementById('submit-appointment-btn');
+            
+            if (!dateInput || !timeSelect || !submitBtn) {
+                console.error('Form elements not found:', { dateInput: !!dateInput, timeSelect: !!timeSelect, submitBtn: !!submitBtn });
+                return;
+            }
+            
+            const dateSelected = dateInput.value !== '';
+            const timeSelected = timeSelect.value !== '';
+            
+            console.log('Form validity check:', { dateSelected, timeSelected });
+            
             submitBtn.disabled = !(dateSelected && timeSelected);
+            
+            if (dateSelected && timeSelected) {
+                console.log('Form is valid, submit button enabled');
+            } else {
+                console.log('Form is invalid, submit button disabled');
+            }
         }
 
         // Event Listeners
