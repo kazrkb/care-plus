@@ -250,6 +250,14 @@ function formatAppointmentDate($datetime) {
     <script>
         // Auto-hide success/error messages after 5 seconds
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('Page loaded, checking modal elements...');
+            const providerModal = document.getElementById('providerSelectionModal');
+            const confirmModal = document.getElementById('confirmationModal');
+            console.log('Modal elements found:', {
+                providerModal: !!providerModal,
+                confirmModal: !!confirmModal
+            });
+            
             const alerts = document.querySelectorAll('.alert-auto-hide');
             alerts.forEach(function(alert) {
                 setTimeout(function() {
@@ -300,6 +308,10 @@ function formatAppointmentDate($datetime) {
 
         <!-- Main Content -->
         <main class="flex-1 p-8">
+            <!-- Debug Button for Testing Provider Modal -->
+            <button onclick="openProviderSelectionModal()" 
+                    class="mb-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Test Provider Modal</button>
+            
             <!-- Header -->
             <header class="flex justify-between items-center mb-8">
                 <div>
@@ -466,7 +478,7 @@ function formatAppointmentDate($datetime) {
     </div>
 
     <!-- Provider Selection Modal -->
-    <div id="providerSelectionModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+    <div id="providerSelectionModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-40">
         <div class="flex items-center justify-center min-h-screen p-4">
             <div class="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto">
                 <div class="p-6">
@@ -698,9 +710,16 @@ function formatAppointmentDate($datetime) {
 
         // Provider Selection Modal Functions
         function openProviderSelectionModal() {
-            document.getElementById('providerSelectionModal').classList.remove('hidden');
+            console.log('Opening provider selection modal...');
+            const modal = document.getElementById('providerSelectionModal');
+            if (!modal) {
+                console.error('Provider selection modal not found!');
+                return;
+            }
+            modal.classList.remove('hidden');
             document.body.style.overflow = 'hidden';
             clearProviderFilters();
+            console.log('Provider selection modal should now be visible');
         }
 
         function closeProviderSelectionModal() {
