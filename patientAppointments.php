@@ -325,16 +325,28 @@ function formatAppointmentDate($datetime) {
                 </div>
             </header>
 
-            <!-- Messages -->
+            <!-- Modern Notifications -->
             <?php if ($successMsg): ?>
-            <div class="alert-auto-hide bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
-                <i class="fa-solid fa-check-circle mr-2"></i><?php echo $successMsg; ?>
+            <div class="alert-notification fixed top-4 right-4 z-50 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg transform translate-x-0 transition-all duration-300 ease-in-out" id="success-alert">
+                <div class="flex items-center">
+                    <i class="fa-solid fa-check-circle mr-2"></i>
+                    <span class="text-sm font-medium"><?php echo $successMsg; ?></span>
+                    <button onclick="dismissAlert('success-alert')" class="ml-4 text-green-200 hover:text-white">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
             </div>
             <?php endif; ?>
 
             <?php if ($errorMsg): ?>
-            <div class="alert-auto-hide bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
-                <i class="fa-solid fa-exclamation-circle mr-2"></i><?php echo $errorMsg; ?>
+            <div class="alert-notification fixed top-4 right-4 z-50 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg transform translate-x-0 transition-all duration-300 ease-in-out" id="error-alert">
+                <div class="flex items-center">
+                    <i class="fa-solid fa-exclamation-circle mr-2"></i>
+                    <span class="text-sm font-medium"><?php echo $errorMsg; ?></span>
+                    <button onclick="dismissAlert('error-alert')" class="ml-4 text-red-200 hover:text-white">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
             </div>
             <?php endif; ?>
 
@@ -863,18 +875,26 @@ function formatAppointmentDate($datetime) {
 
         // Event Listeners
         document.addEventListener('DOMContentLoaded', function() {
-            // Auto-hide success/error messages after 5 seconds
-            const alerts = document.querySelectorAll('.alert-auto-hide');
-            alerts.forEach(function(alert) {
+            // Auto-dismiss notifications after 2 seconds
+            const notifications = document.querySelectorAll('.alert-notification');
+            notifications.forEach(function(notification) {
                 setTimeout(function() {
-                    alert.style.transition = 'opacity 0.5s';
-                    alert.style.opacity = '0';
-                    setTimeout(function() {
-                        alert.remove();
-                    }, 500);
-                }, 5000);
+                    dismissAlert(notification.id);
+                }, 2000);
             });
         });
+
+        // Notification Functions
+        function dismissAlert(alertId) {
+            const alert = document.getElementById(alertId);
+            if (alert) {
+                alert.style.transform = 'translateX(100%)';
+                alert.style.opacity = '0';
+                setTimeout(function() {
+                    alert.remove();
+                }, 300);
+            }
+        }
 
         // Close modals when clicking outside
         document.getElementById('providerSelectionModal').addEventListener('click', function(e) {

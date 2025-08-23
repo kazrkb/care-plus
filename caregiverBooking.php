@@ -254,14 +254,27 @@ function getStatusColor($status) {
                 </div>
             </header>
             
+            <!-- Modern Notifications -->
             <?php if ($successMsg): ?>
-                <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6" role="alert">
-                    <p><?php echo $successMsg; ?></p>
+                <div class="alert-notification fixed top-4 right-4 z-50 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg transform translate-x-0 transition-all duration-300 ease-in-out" id="success-alert">
+                    <div class="flex items-center">
+                        <i class="fa-solid fa-check-circle mr-2"></i>
+                        <span class="text-sm font-medium"><?php echo $successMsg; ?></span>
+                        <button onclick="dismissAlert('success-alert')" class="ml-4 text-green-200 hover:text-white">
+                            <i class="fa-solid fa-times"></i>
+                        </button>
+                    </div>
                 </div>
             <?php endif; ?>
             <?php if ($errorMsg): ?>
-                <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6" role="alert">
-                    <p><?php echo $errorMsg; ?></p>
+                <div class="alert-notification fixed top-4 right-4 z-50 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg transform translate-x-0 transition-all duration-300 ease-in-out" id="error-alert">
+                    <div class="flex items-center">
+                        <i class="fa-solid fa-exclamation-circle mr-2"></i>
+                        <span class="text-sm font-medium"><?php echo $errorMsg; ?></span>
+                        <button onclick="dismissAlert('error-alert')" class="ml-4 text-red-200 hover:text-white">
+                            <i class="fa-solid fa-times"></i>
+                        </button>
+                    </div>
                 </div>
             <?php endif; ?>
 
@@ -745,7 +758,27 @@ function getStatusColor($status) {
         // Set default tab
         document.addEventListener('DOMContentLoaded', function() {
             showTab('my-bookings');
+            
+            // Auto-dismiss notifications after 2 seconds
+            const notifications = document.querySelectorAll('.alert-notification');
+            notifications.forEach(function(notification) {
+                setTimeout(function() {
+                    dismissAlert(notification.id);
+                }, 2000);
+            });
         });
+
+        // Notification Functions
+        function dismissAlert(alertId) {
+            const alert = document.getElementById(alertId);
+            if (alert) {
+                alert.style.transform = 'translateX(100%)';
+                alert.style.opacity = '0';
+                setTimeout(function() {
+                    alert.remove();
+                }, 300);
+            }
+        }
     </script>
 </body>
 </html>
