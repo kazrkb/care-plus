@@ -340,29 +340,34 @@ function formatAppointmentDate($datetime) {
 
             <!-- Filter Tabs -->
             <div class="mb-6">
-                <div class="border-b border-gray-200">
-                    <nav class="-mb-px flex space-x-8">
-                        <a href="?filter=all" class="<?php echo $filter == 'all' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'; ?> whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
-                            All Appointments
-                            <span class="ml-2 bg-gray-100 text-gray-900 py-0.5 px-2.5 rounded-full text-xs"><?php echo $counts['total']; ?></span>
-                        </a>
-                        <a href="?filter=upcoming" class="<?php echo $filter == 'upcoming' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'; ?> whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
-                            Upcoming
-                            <span class="ml-2 bg-blue-100 text-blue-900 py-0.5 px-2.5 rounded-full text-xs"><?php echo $counts['upcoming']; ?></span>
-                        </a>
-                        <a href="?filter=requested" class="<?php echo $filter == 'requested' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'; ?> whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
-                            Pending Approval
-                            <span class="ml-2 bg-yellow-100 text-yellow-900 py-0.5 px-2.5 rounded-full text-xs"><?php echo $counts['requested']; ?></span>
-                        </a>
-                        <a href="?filter=past" class="<?php echo $filter == 'past' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'; ?> whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
-                            Past
-                            <span class="ml-2 bg-green-100 text-green-900 py-0.5 px-2.5 rounded-full text-xs"><?php echo $counts['past']; ?></span>
-                        </a>
-                        <a href="?filter=canceled" class="<?php echo $filter == 'canceled' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'; ?> whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
-                            Canceled
-                            <span class="ml-2 bg-red-100 text-red-900 py-0.5 px-2.5 rounded-full text-xs"><?php echo $counts['canceled']; ?></span>
-                        </a>
-                    </nav>
+                <div class="flex justify-between items-center mb-4">
+                    <div class="border-b border-gray-200 flex-1">
+                        <nav class="-mb-px flex space-x-8">
+                            <a href="?filter=all" class="<?php echo $filter == 'all' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'; ?> whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
+                                All Appointments
+                                <span class="ml-2 bg-gray-100 text-gray-900 py-0.5 px-2.5 rounded-full text-xs"><?php echo $counts['total']; ?></span>
+                            </a>
+                            <a href="?filter=upcoming" class="<?php echo $filter == 'upcoming' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'; ?> whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
+                                Upcoming
+                                <span class="ml-2 bg-blue-100 text-blue-900 py-0.5 px-2.5 rounded-full text-xs"><?php echo $counts['upcoming']; ?></span>
+                            </a>
+                            <a href="?filter=requested" class="<?php echo $filter == 'requested' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'; ?> whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
+                                Pending Approval
+                                <span class="ml-2 bg-yellow-100 text-yellow-900 py-0.5 px-2.5 rounded-full text-xs"><?php echo $counts['requested']; ?></span>
+                            </a>
+                            <a href="?filter=past" class="<?php echo $filter == 'past' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'; ?> whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
+                                Past
+                                <span class="ml-2 bg-green-100 text-green-900 py-0.5 px-2.5 rounded-full text-xs"><?php echo $counts['past']; ?></span>
+                            </a>
+                            <a href="?filter=canceled" class="<?php echo $filter == 'canceled' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'; ?> whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
+                                Canceled
+                                <span class="ml-2 bg-red-100 text-red-900 py-0.5 px-2.5 rounded-full text-xs"><?php echo $counts['canceled']; ?></span>
+                            </a>
+                        </nav>
+                    </div>
+                    <button onclick="openProviderSelectionModal()" class="bg-dark-orchid text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition ml-4">
+                        <i class="fa-solid fa-plus mr-2"></i>Book Appointment
+                    </button>
                 </div>
             </div>
 
@@ -456,113 +461,224 @@ function formatAppointmentDate($datetime) {
         </main>
     </div>
 
-    <!-- Request Appointment Modal -->
-    <div id="requestModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+    <!-- Provider Selection Modal -->
+    <div id="providerSelectionModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="p-6">
+                    <!-- Modal Header -->
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-slate-800">Select Healthcare Provider</h2>
+                        <button onclick="closeProviderSelectionModal()" class="text-gray-400 hover:text-gray-600">
+                            <i class="fa-solid fa-times fa-xl"></i>
+                        </button>
+                    </div>
+
+                    <!-- Filter Section -->
+                    <div class="mb-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-semibold text-slate-800">Available Providers</h3>
+                            <button onclick="toggleProviderFilters()" class="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition">
+                                <i class="fa-solid fa-filter mr-2"></i>Filters
+                            </button>
+                        </div>
+                        
+                        <!-- Filter Controls -->
+                        <div id="provider-filter-section" class="mb-4 p-4 bg-gray-50 rounded-lg hidden">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Provider Type</label>
+                                    <select id="provider-type-filter" class="w-full p-2 border border-gray-300 rounded-md" onchange="applyProviderFilters()">
+                                        <option value="">All Types</option>
+                                        <option value="Doctor">Doctor</option>
+                                        <option value="Nutritionist">Nutritionist</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Specialty</label>
+                                    <select id="specialty-filter" class="w-full p-2 border border-gray-300 rounded-md" onchange="applyProviderFilters()">
+                                        <option value="">All Specialties</option>
+                                        <option value="Cardiology">Cardiology</option>
+                                        <option value="General Medicine">General Medicine</option>
+                                        <option value="Public Health Nutrition">Public Health Nutrition</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Consultation Fee</label>
+                                    <select id="fee-filter" class="w-full p-2 border border-gray-300 rounded-md" onchange="applyProviderFilters()">
+                                        <option value="">All Fees</option>
+                                        <option value="0-600">৳0 - ৳600</option>
+                                        <option value="600-800">৳600 - ৳800</option>
+                                        <option value="800-1000">৳800+</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="mt-4 flex justify-end">
+                                <button onclick="clearProviderFilters()" class="text-sm text-gray-600 hover:text-gray-800">Clear All Filters</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Providers List -->
+                    <div class="space-y-4 max-h-96 overflow-y-auto" id="providers-container">
+                        <?php foreach ($providers as $provider): ?>
+                        <div class="provider-card border border-gray-200 rounded-lg hover:shadow-md transition-shadow cursor-pointer" 
+                             data-type="<?php echo htmlspecialchars($provider['role']); ?>" 
+                             data-specialty="<?php echo htmlspecialchars($provider['specialty']); ?>"
+                             data-fee="<?php echo $provider['consultationFees']; ?>"
+                             onclick="selectProviderForAppointment(<?php echo $provider['userID']; ?>, '<?php echo htmlspecialchars($provider['Name']); ?>', '<?php echo htmlspecialchars($provider['role']); ?>')">
+                            
+                            <!-- Provider Card -->
+                            <div class="p-4">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center space-x-4 flex-1">
+                                        <!-- Provider Icon -->
+                                        <div class="flex-shrink-0">
+                                            <?php if ($provider['role'] == 'Doctor'): ?>
+                                                <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                                                    <i class="fa-solid fa-user-doctor text-blue-600 fa-lg"></i>
+                                                </div>
+                                            <?php else: ?>
+                                                <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                                                    <i class="fa-solid fa-utensils text-green-600 fa-lg"></i>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
+                                        
+                                        <!-- Provider Info -->
+                                        <div class="flex-1">
+                                            <div class="flex items-center space-x-3 mb-1">
+                                                <h3 class="text-lg font-semibold text-slate-800"><?php echo htmlspecialchars($provider['Name']); ?></h3>
+                                                <span class="px-2 py-1 text-xs rounded-full font-medium
+                                                    <?php echo $provider['role'] == 'Doctor' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'; ?>">
+                                                    <?php echo htmlspecialchars($provider['role']); ?>
+                                                </span>
+                                            </div>
+                                            <div class="flex items-center space-x-6">
+                                                <p class="text-sm text-gray-600">
+                                                    <i class="fa-solid fa-stethoscope mr-1"></i>
+                                                    <?php echo htmlspecialchars($provider['specialty']); ?>
+                                                </p>
+                                                <p class="text-sm font-semibold text-gray-700">
+                                                    <i class="fa-solid fa-dollar-sign mr-1"></i>
+                                                    Fee: ৳<?php echo number_format($provider['consultationFees'], 0); ?>
+                                                </p>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Selection Indicator -->
+                                        <div class="provider-selection-indicator hidden">
+                                            <i class="fa-solid fa-check-circle text-green-600 fa-lg"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                    
+                    <!-- No Results Message -->
+                    <div id="no-providers-results" class="text-center py-12 hidden">
+                        <i class="fa-solid fa-search fa-4x text-gray-400 mb-4"></i>
+                        <h3 class="text-lg font-semibold text-gray-900 mb-2">No providers found</h3>
+                        <p class="text-gray-600">Try adjusting your filters to see more results.</p>
+                    </div>
+                    
+                    <!-- Modal Footer -->
+                    <div class="flex justify-between items-center pt-4 border-t mt-6">
+                        <div id="selected-provider-info" class="text-sm text-gray-600 hidden">
+                            <span id="selected-provider-details"></span>
+                        </div>
+                        <div class="flex space-x-3">
+                            <button type="button" onclick="closeProviderSelectionModal()" 
+                                    class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
+                                Cancel
+                            </button>
+                            <button type="button" onclick="proceedToAppointmentBooking()" id="proceed-btn"
+                                    class="bg-dark-orchid text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                    disabled>
+                                <i class="fa-solid fa-arrow-right mr-2"></i>Continue to Book
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Appointment Booking Modal -->
+    <div id="appointmentBookingModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
         <div class="flex items-center justify-center min-h-screen p-4">
             <div class="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                 <div class="p-6">
                     <!-- Modal Header -->
                     <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-2xl font-bold text-slate-800">Request New Appointment</h2>
-                        <button onclick="closeRequestModal()" class="text-gray-400 hover:text-gray-600">
+                        <div>
+                            <h2 class="text-2xl font-bold text-slate-800">Book Appointment</h2>
+                            <p class="text-sm text-gray-600 mt-1">with <span id="booking-provider-name" class="font-medium"></span></p>
+                        </div>
+                        <button onclick="closeAppointmentBookingModal()" class="text-gray-400 hover:text-gray-600">
                             <i class="fa-solid fa-times fa-xl"></i>
                         </button>
                     </div>
 
-                    <!-- Request Form -->
-                    <form method="POST" id="requestForm" class="space-y-6">
+                    <!-- Booking Form -->
+                    <form method="POST" id="appointmentForm" class="space-y-6">
                         <input type="hidden" name="action" value="request_appointment">
-                        <input type="hidden" name="providerID" id="selectedProviderID">
+                        <input type="hidden" name="providerID" id="booking-providerID">
 
-                        <!-- Step 1: Choose Provider -->
-                        <div>
-                            <h3 class="text-lg font-semibold text-slate-800 mb-4">
-                                <span class="bg-dark-orchid text-white rounded-full w-6 h-6 inline-flex items-center justify-center text-sm mr-2">1</span>
-                                Choose Healthcare Provider
-                            </h3>
-                            
-                            <div class="grid grid-cols-1 gap-3 max-h-60 overflow-y-auto">
-                                <?php foreach ($providers as $provider): ?>
-                                <div class="provider-card border-2 border-gray-200 rounded-lg p-3 cursor-pointer hover:bg-gray-50" 
-                                     onclick="selectProvider(<?php echo $provider['userID']; ?>, '<?php echo htmlspecialchars($provider['Name']); ?>')">
-                                    <div class="flex items-center space-x-3">
-                                        <div class="flex-shrink-0">
-                                            <?php if ($provider['role'] == 'Doctor'): ?>
-                                                <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                                                    <i class="fa-solid fa-user-doctor text-blue-600"></i>
-                                                </div>
-                                            <?php else: ?>
-                                                <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                                                    <i class="fa-solid fa-utensils text-green-600"></i>
-                                                </div>
-                                            <?php endif; ?>
-                                        </div>
-                                        <div class="flex-1">
-                                            <h4 class="font-semibold text-slate-800"><?php echo htmlspecialchars($provider['Name']); ?></h4>
-                                            <p class="text-sm text-gray-600"><?php echo htmlspecialchars($provider['specialty']); ?></p>
-                                            <p class="text-sm text-gray-600">Fee: ৳<?php echo number_format($provider['consultationFees'], 0); ?></p>
-                                        </div>
-                                        <span class="text-xs px-2 py-1 rounded-full 
-                                            <?php echo $provider['role'] == 'Doctor' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'; ?>">
-                                            <?php echo $provider['role']; ?>
-                                        </span>
-                                    </div>
-                                </div>
-                                <?php endforeach; ?>
-                            </div>
-                        </div>
-
-                        <!-- Step 2: Choose Date & Time -->
-                        <div>
-                            <h3 class="text-lg font-semibold text-slate-800 mb-4">
-                                <span class="bg-dark-orchid text-white rounded-full w-6 h-6 inline-flex items-center justify-center text-sm mr-2">2</span>
-                                Select Date & Time
-                            </h3>
-                            
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Provider Summary -->
+                        <div class="bg-purple-50 p-4 rounded-lg">
+                            <div class="flex items-center space-x-3">
+                                <div id="booking-provider-icon"></div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Date</label>
-                                    <input type="date" name="appointmentDate" 
-                                           min="<?php echo date('Y-m-d', strtotime('+1 day')); ?>"
-                                           max="<?php echo date('Y-m-d', strtotime('+30 days')); ?>"
-                                           class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" 
-                                           required>
-                                </div>
-                                
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Time</label>
-                                    <select name="appointmentTime" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" required>
-                                        <option value="">Select time</option>
-                                        <?php foreach ($timeSlots as $slot): ?>
-                                        <option value="<?php echo $slot; ?>">
-                                            <?php echo date('g:i A', strtotime($slot)); ?>
-                                        </option>
-                                        <?php endforeach; ?>
-                                    </select>
+                                    <h3 class="font-semibold text-slate-800" id="booking-provider-title"></h3>
+                                    <p class="text-sm text-gray-600" id="booking-provider-specialty"></p>
+                                    <p class="text-sm font-medium text-gray-700">Consultation Fee: ৳<span id="booking-provider-fee"></span></p>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Step 3: Notes -->
-                        <div>
-                            <h3 class="text-lg font-semibold text-slate-800 mb-4">
-                                <span class="bg-dark-orchid text-white rounded-full w-6 h-6 inline-flex items-center justify-center text-sm mr-2">3</span>
-                                Additional Notes (Optional)
-                            </h3>
+                        <!-- Date & Time Selection -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Appointment Date</label>
+                                <input type="date" name="appointmentDate" 
+                                       min="<?php echo date('Y-m-d', strtotime('+1 day')); ?>"
+                                       max="<?php echo date('Y-m-d', strtotime('+30 days')); ?>"
+                                       class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" 
+                                       required onchange="checkAppointmentFormValidity()">
+                            </div>
                             
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Preferred Time</label>
+                                <select name="appointmentTime" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" required onchange="checkAppointmentFormValidity()">
+                                    <option value="">Select time</option>
+                                    <?php foreach ($timeSlots as $slot): ?>
+                                    <option value="<?php echo $slot; ?>">
+                                        <?php echo date('g:i A', strtotime($slot)); ?>
+                                    </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Notes -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Additional Notes (Optional)</label>
                             <textarea name="notes" rows="3" 
                                       class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                                       placeholder="Describe your health concerns or specific requirements..."></textarea>
                         </div>
 
                         <!-- Modal Footer -->
-                        <div class="flex justify-end space-x-3 pt-4 border-t">
-                            <button type="button" onclick="closeRequestModal()" 
+                        <div class="flex justify-between pt-4 border-t">
+                            <button type="button" onclick="backToProviderSelection()" 
                                     class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
-                                Cancel
+                                <i class="fa-solid fa-arrow-left mr-2"></i>Back
                             </button>
-                            <button type="submit" id="submitRequestBtn" 
-                                    class="bg-dark-orchid text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition disabled:opacity-50"
+                            <button type="submit" id="submit-appointment-btn" 
+                                    class="bg-dark-orchid text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                                     disabled>
                                 <i class="fa-solid fa-paper-plane mr-2"></i>Submit Request
                             </button>
@@ -576,67 +692,183 @@ function formatAppointmentDate($datetime) {
     <script>
         let selectedProvider = null;
 
-        function openRequestModal() {
-            document.getElementById('requestModal').classList.remove('hidden');
+        // Provider Selection Modal Functions
+        function openProviderSelectionModal() {
+            document.getElementById('providerSelectionModal').classList.remove('hidden');
             document.body.style.overflow = 'hidden';
+            clearProviderFilters();
         }
 
-        function closeRequestModal() {
-            document.getElementById('requestModal').classList.add('hidden');
+        function closeProviderSelectionModal() {
+            document.getElementById('providerSelectionModal').classList.add('hidden');
             document.body.style.overflow = 'auto';
-            // Reset form
-            document.getElementById('requestForm').reset();
-            document.querySelectorAll('.provider-card').forEach(card => {
-                card.classList.remove('selected');
-                card.style.borderColor = '';
-                card.style.backgroundColor = '';
-            });
-            selectedProvider = null;
-            checkFormValidity();
+            resetProviderSelection();
         }
 
-        function selectProvider(providerID, providerName) {
-            // Remove previous selection
+        function toggleProviderFilters() {
+            const filterSection = document.getElementById('provider-filter-section');
+            filterSection.classList.toggle('hidden');
+        }
+
+        function selectProviderForAppointment(providerID, providerName, providerRole) {
+            // Remove previous selections
             document.querySelectorAll('.provider-card').forEach(card => {
-                card.classList.remove('selected');
-                card.style.borderColor = '';
-                card.style.backgroundColor = '';
+                card.classList.remove('bg-purple-50', 'border-purple-500');
+                card.classList.add('border-gray-200');
+                card.querySelector('.provider-selection-indicator').classList.add('hidden');
             });
             
             // Add selection to clicked card
-            event.currentTarget.classList.add('selected');
-            event.currentTarget.style.borderColor = '#9932CC';
-            event.currentTarget.style.backgroundColor = '#f3e8ff';
+            const clickedCard = event.currentTarget;
+            clickedCard.classList.add('bg-purple-50', 'border-purple-500');
+            clickedCard.classList.remove('border-gray-200');
+            clickedCard.querySelector('.provider-selection-indicator').classList.remove('hidden');
             
-            // Update hidden input
-            document.getElementById('selectedProviderID').value = providerID;
-            selectedProvider = {id: providerID, name: providerName};
+            // Store selected provider
+            const specialty = clickedCard.dataset.specialty;
+            const fee = clickedCard.dataset.fee;
             
-            checkFormValidity();
+            selectedProvider = {
+                id: providerID,
+                name: providerName,
+                role: providerRole,
+                specialty: specialty,
+                fee: fee
+            };
+            
+            // Update UI
+            const info = document.getElementById('selected-provider-info');
+            const details = document.getElementById('selected-provider-details');
+            details.innerHTML = `Selected: <strong>${providerName}</strong> (${providerRole})`;
+            info.classList.remove('hidden');
+            
+            document.getElementById('proceed-btn').disabled = false;
         }
 
-        function checkFormValidity() {
-            const providerSelected = selectedProvider !== null;
+        function proceedToAppointmentBooking() {
+            if (!selectedProvider) return;
+            
+            // Close provider selection modal
+            closeProviderSelectionModal();
+            
+            // Populate appointment booking modal
+            document.getElementById('booking-providerID').value = selectedProvider.id;
+            document.getElementById('booking-provider-name').textContent = selectedProvider.name;
+            document.getElementById('booking-provider-title').textContent = selectedProvider.name;
+            document.getElementById('booking-provider-specialty').textContent = selectedProvider.specialty;
+            document.getElementById('booking-provider-fee').textContent = parseFloat(selectedProvider.fee).toLocaleString('en-US', {minimumFractionDigits: 0});
+            
+            // Set provider icon
+            const iconContainer = document.getElementById('booking-provider-icon');
+            if (selectedProvider.role === 'Doctor') {
+                iconContainer.innerHTML = '<div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center"><i class="fa-solid fa-user-doctor text-blue-600"></i></div>';
+            } else {
+                iconContainer.innerHTML = '<div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center"><i class="fa-solid fa-utensils text-green-600"></i></div>';
+            }
+            
+            // Open appointment booking modal
+            document.getElementById('appointmentBookingModal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function backToProviderSelection() {
+            document.getElementById('appointmentBookingModal').classList.add('hidden');
+            document.getElementById('providerSelectionModal').classList.remove('hidden');
+        }
+
+        function closeAppointmentBookingModal() {
+            document.getElementById('appointmentBookingModal').classList.add('hidden');
+            document.body.style.overflow = 'auto';
+            
+            // Reset form
+            document.getElementById('appointmentForm').reset();
+            checkAppointmentFormValidity();
+        }
+
+        function resetProviderSelection() {
+            selectedProvider = null;
+            document.getElementById('selected-provider-info').classList.add('hidden');
+            document.getElementById('proceed-btn').disabled = true;
+            
+            document.querySelectorAll('.provider-card').forEach(card => {
+                card.classList.remove('bg-purple-50', 'border-purple-500');
+                card.classList.add('border-gray-200');
+                card.querySelector('.provider-selection-indicator').classList.add('hidden');
+            });
+        }
+
+        // Filter Functions
+        function applyProviderFilters() {
+            const typeFilter = document.getElementById('provider-type-filter').value;
+            const specialtyFilter = document.getElementById('specialty-filter').value;
+            const feeFilter = document.getElementById('fee-filter').value;
+            
+            const cards = document.querySelectorAll('.provider-card');
+            let visibleCount = 0;
+            
+            cards.forEach(card => {
+                let show = true;
+                
+                // Type filter
+                if (typeFilter && card.dataset.type !== typeFilter) {
+                    show = false;
+                }
+                
+                // Specialty filter
+                if (specialtyFilter && show && card.dataset.specialty !== specialtyFilter) {
+                    show = false;
+                }
+                
+                // Fee filter
+                if (feeFilter && show) {
+                    const fee = parseFloat(card.dataset.fee);
+                    const [min, max] = feeFilter.split('-').map(Number);
+                    if (max) {
+                        show = fee >= min && fee <= max;
+                    } else {
+                        show = fee >= min;
+                    }
+                }
+                
+                if (show) {
+                    card.style.display = 'block';
+                    visibleCount++;
+                } else {
+                    card.style.display = 'none';
+                    // Reset selection if hidden card was selected
+                    if (card.classList.contains('bg-purple-50')) {
+                        resetProviderSelection();
+                    }
+                }
+            });
+            
+            // Show/hide no results message
+            const noResults = document.getElementById('no-providers-results');
+            if (visibleCount === 0) {
+                noResults.classList.remove('hidden');
+            } else {
+                noResults.classList.add('hidden');
+            }
+        }
+
+        function clearProviderFilters() {
+            document.getElementById('provider-type-filter').value = '';
+            document.getElementById('specialty-filter').value = '';
+            document.getElementById('fee-filter').value = '';
+            applyProviderFilters();
+        }
+
+        function checkAppointmentFormValidity() {
             const dateSelected = document.querySelector('input[name="appointmentDate"]').value !== '';
             const timeSelected = document.querySelector('select[name="appointmentTime"]').value !== '';
             
-            const submitBtn = document.getElementById('submitRequestBtn');
-            submitBtn.disabled = !(providerSelected && dateSelected && timeSelected);
+            const submitBtn = document.getElementById('submit-appointment-btn');
+            submitBtn.disabled = !(dateSelected && timeSelected);
         }
 
-        // Add event listeners to form inputs
-        document.querySelector('input[name="appointmentDate"]').addEventListener('change', checkFormValidity);
-        document.querySelector('select[name="appointmentTime"]').addEventListener('change', checkFormValidity);
-
-        // Close modal when clicking outside
-        document.getElementById('requestModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeRequestModal();
-            }
-        });
-
-        // Auto-hide success/error messages after 5 seconds
+        // Event Listeners
         document.addEventListener('DOMContentLoaded', function() {
+            // Auto-hide success/error messages after 5 seconds
             const alerts = document.querySelectorAll('.alert-auto-hide');
             alerts.forEach(function(alert) {
                 setTimeout(function() {
@@ -649,9 +881,27 @@ function formatAppointmentDate($datetime) {
             });
         });
 
+        // Close modals when clicking outside
+        document.getElementById('providerSelectionModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeProviderSelectionModal();
+            }
+        });
+
+        document.getElementById('appointmentBookingModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAppointmentBookingModal();
+            }
+        });
+
         function confirmCancel(appointmentId, providerName, dateTime) {
             const confirmMsg = `Are you sure you want to cancel your appointment with ${providerName} on ${dateTime}?\n\nThis action cannot be undone.`;
             return confirm(confirmMsg);
+        }
+
+        // Legacy function for backward compatibility
+        function openRequestModal() {
+            openProviderSelectionModal();
         }
     </script>
 </body>
