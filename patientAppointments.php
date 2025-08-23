@@ -157,6 +157,9 @@ $providersStmt = $conn->prepare($providersQuery);
 $providersStmt->execute();
 $providers = $providersStmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
+// Debug: Check what providers were fetched
+error_log("Providers fetched: " . print_r($providers, true));
+
 $conn->close();
 
 // Generate time slots (9 AM to 5 PM)
@@ -533,6 +536,19 @@ function formatAppointmentDate($datetime) {
 
                     <!-- Providers List -->
                     <div class="space-y-4 max-h-96 overflow-y-auto" id="providers-container">
+                        <!-- Debug Info -->
+                        <div class="text-sm text-gray-500 mb-4 bg-blue-50 p-3 rounded">
+                            📊 Found <strong><?php echo count($providers); ?></strong> healthcare providers
+                        </div>
+                        
+                        <?php if (empty($providers)): ?>
+                            <div class="text-center py-8">
+                                <i class="fa-solid fa-user-doctor fa-3x text-gray-400 mb-4"></i>
+                                <h3 class="text-lg font-semibold text-gray-600 mb-2">No Providers Available</h3>
+                                <p class="text-gray-500">Please check the database connection or contact support.</p>
+                            </div>
+                        <?php else: ?>
+                        
                         <?php foreach ($providers as $provider): ?>
                         <div class="provider-card border border-gray-200 rounded-lg hover:shadow-md transition-shadow cursor-pointer" 
                              data-type="<?php echo htmlspecialchars($provider['role']); ?>" 
@@ -587,6 +603,8 @@ function formatAppointmentDate($datetime) {
                             </div>
                         </div>
                         <?php endforeach; ?>
+                        
+                        <?php endif; // End if providers available check ?>
                     </div>
                     
                     <!-- No Results Message -->
