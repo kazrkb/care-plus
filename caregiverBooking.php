@@ -244,9 +244,6 @@ function getStatusColor($status) {
                     <p class="text-gray-600 mt-1">Book caregivers and manage your caregiver services.</p>
                 </div>
                 <div class="flex items-center space-x-4">
-                    <button onclick="toggleBookingSection()" class="bg-dark-orchid text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition">
-                        <i class="fa-solid fa-plus mr-2"></i>New Booking
-                    </button>
                     <div class="text-right">
                         <p class="font-semibold text-slate-700"><?php echo htmlspecialchars($userName); ?></p>
                         <p class="text-sm text-gray-500">Patient</p>
@@ -401,77 +398,189 @@ function getStatusColor($status) {
             <!-- Available Caregivers Tab -->
             <div id="available-caregivers-content" class="tab-content hidden">
                 <div class="bg-white rounded-lg shadow-orchid-custom p-6">
-                    <h2 class="text-2xl font-bold text-slate-800 mb-6">Available Caregivers</h2>
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-slate-800">Available Caregivers</h2>
+                        <div class="flex items-center space-x-4">
+                            <button onclick="toggleFilters()" class="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition">
+                                <i class="fa-solid fa-filter mr-2"></i>Filters
+                            </button>
+                        </div>
+                    </div>
                     
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Filter Section -->
+                    <div id="filter-section" class="mb-6 p-4 bg-gray-50 rounded-lg hidden">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Caregiver Type</label>
+                                <select id="type-filter" class="w-full p-2 border border-gray-300 rounded-md" onchange="applyFilters()">
+                                    <option value="">All Types</option>
+                                    <option value="Nurse">Nurse</option>
+                                    <option value="Physiotherapist">Physiotherapist</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Daily Rate Range</label>
+                                <select id="rate-filter" class="w-full p-2 border border-gray-300 rounded-md" onchange="applyFilters()">
+                                    <option value="">All Rates</option>
+                                    <option value="0-1200">৳0 - ৳1,200</option>
+                                    <option value="1200-1600">৳1,200 - ৳1,600</option>
+                                    <option value="1600-2000">৳1,600+</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Availability</label>
+                                <select id="availability-filter" class="w-full p-2 border border-gray-300 rounded-md" onchange="applyFilters()">
+                                    <option value="">All</option>
+                                    <option value="available">Available Now</option>
+                                    <option value="unavailable">No Slots</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mt-4 flex justify-end">
+                            <button onclick="clearFilters()" class="text-sm text-gray-600 hover:text-gray-800">Clear All Filters</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Caregivers List -->
+                    <div class="space-y-4" id="caregivers-container">
                         <?php foreach ($caregivers as $cg): ?>
-                        <div class="bg-white p-6 rounded-lg shadow-lg border border-gray-200 flex flex-col">
-                            <div class="flex items-center space-x-3 mb-3">
-                                <?php if (!empty($cg['profilePhoto'])): ?>
-                                    <img src="uploads/<?php echo htmlspecialchars($cg['profilePhoto']); ?>" alt="<?php echo htmlspecialchars($cg['Name']); ?>" class="w-12 h-12 rounded-full object-cover">
-                                <?php else: ?>
-                                    <div class="w-12 h-12 rounded-full bg-dark-orchid text-white flex items-center justify-center font-bold">
-                                        <?php echo strtoupper(substr($cg['Name'], 0, 2)); ?>
-                                    </div>
-                                <?php endif; ?>
-                                <div>
-                                    <h3 class="text-lg font-semibold text-slate-800"><?php echo htmlspecialchars($cg['Name']); ?></h3>
-                                    <p class="text-sm text-purple-600 font-medium"><?php echo htmlspecialchars($cg['careGiverType']); ?></p>
-                                </div>
-                            </div>
+                        <div class="caregiver-card border border-gray-200 rounded-lg hover:shadow-md transition-shadow" 
+                             data-type="<?php echo htmlspecialchars($cg['careGiverType']); ?>" 
+                             data-rate="<?php echo $cg['dailyRate']; ?>"
+                             data-availability="<?php echo isset($availabilitiesByCareGiver[$cg['careGiverID']]) ? 'available' : 'unavailable'; ?>">
                             
-                            <?php if (!empty($cg['certifications'])): ?>
-                                <div class="mb-3">
-                                    <p class="text-xs text-gray-600">
-                                        <i class="fa-solid fa-certificate mr-1"></i>
-                                        <?php echo htmlspecialchars($cg['certifications']); ?>
-                                    </p>
-                                </div>
-                            <?php endif; ?>
-                            
-                            <div class="text-sm text-gray-600 mb-4 flex-grow">
-                                <div class="grid grid-cols-1 gap-1">
-                                    <p><strong>Daily:</strong> ৳<?php echo number_format($cg['dailyRate'], 2); ?></p>
-                                    <p><strong>Weekly:</strong> ৳<?php echo number_format($cg['weeklyRate'], 2); ?></p>
-                                    <p><strong>Monthly:</strong> ৳<?php echo number_format($cg['monthlyRate'], 2); ?></p>
-                                </div>
-                            </div>
-
-                            <?php if (isset($availabilitiesByCareGiver[$cg['careGiverID']])): ?>
-                                <div class="mt-4">
-                                    <form method="POST" id="booking-form-<?php echo $cg['careGiverID']; ?>">
-                                        <label class="block text-sm font-medium text-gray-700 mb-2">Available Slots:</label>
-                                        <select name="book_availability_id" class="w-full p-2 border border-gray-300 rounded-md mb-3" required onchange="updateBookingInfo(<?php echo $cg['careGiverID']; ?>, this.value)">
-                                            <option value="">Select a time slot...</option>
-                                            <?php foreach ($availabilitiesByCareGiver[$cg['careGiverID']] as $slot): ?>
-                                                <option value="<?php echo $slot['availabilityID']; ?>" 
-                                                        data-type="<?php echo $slot['bookingType']; ?>" 
-                                                        data-date="<?php echo formatDate($slot['startDate']); ?>"
-                                                        data-rate="<?php echo $cg[$slot['bookingType'] === 'Daily' ? 'dailyRate' : ($slot['bookingType'] === 'Weekly' ? 'weeklyRate' : 'monthlyRate')]; ?>">
-                                                    <?php echo $slot['bookingType']; ?> - <?php echo formatDate($slot['startDate']); ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
+                            <!-- Collapsed Card View -->
+                            <div class="p-4 cursor-pointer" onclick="toggleCard(<?php echo $cg['careGiverID']; ?>)">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center space-x-4 flex-1">
+                                        <!-- Profile Photo -->
+                                        <?php if (!empty($cg['profilePhoto'])): ?>
+                                            <img src="uploads/<?php echo htmlspecialchars($cg['profilePhoto']); ?>" alt="<?php echo htmlspecialchars($cg['Name']); ?>" class="w-12 h-12 rounded-full object-cover">
+                                        <?php else: ?>
+                                            <div class="w-12 h-12 rounded-full bg-dark-orchid text-white flex items-center justify-center font-bold">
+                                                <?php echo strtoupper(substr($cg['Name'], 0, 2)); ?>
+                                            </div>
+                                        <?php endif; ?>
                                         
-                                        <div id="booking-info-<?php echo $cg['careGiverID']; ?>" class="mb-3 p-2 bg-purple-50 rounded text-sm text-gray-700" style="display: none;">
-                                            <p id="booking-details-<?php echo $cg['careGiverID']; ?>"></p>
+                                        <!-- Basic Info -->
+                                        <div class="flex-1">
+                                            <div class="flex items-center space-x-3">
+                                                <h3 class="text-lg font-semibold text-slate-800"><?php echo htmlspecialchars($cg['Name']); ?></h3>
+                                                <span class="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full font-medium">
+                                                    <?php echo htmlspecialchars($cg['careGiverType']); ?>
+                                                </span>
+                                            </div>
+                                            <div class="flex items-center space-x-6 mt-1">
+                                                <p class="text-sm text-gray-600">
+                                                    <i class="fa-solid fa-dollar-sign mr-1"></i>
+                                                    Daily: ৳<?php echo number_format($cg['dailyRate'], 0); ?>
+                                                </p>
+                                                <?php if (!empty($cg['certifications'])): ?>
+                                                    <p class="text-sm text-gray-500">
+                                                        <i class="fa-solid fa-certificate mr-1"></i>
+                                                        <?php echo htmlspecialchars(substr($cg['certifications'], 0, 30)) . (strlen($cg['certifications']) > 30 ? '...' : ''); ?>
+                                                    </p>
+                                                <?php endif; ?>
+                                            </div>
                                         </div>
                                         
-                                        <button type="submit" class="w-full bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition disabled:bg-gray-400 disabled:cursor-not-allowed" 
-                                                id="book-btn-<?php echo $cg['careGiverID']; ?>" disabled>
-                                            <i class="fa-solid fa-calendar-plus mr-2"></i>Book This Caregiver
-                                        </button>
-                                    </form>
+                                        <!-- Availability Status -->
+                                        <div class="flex items-center space-x-3">
+                                            <?php if (isset($availabilitiesByCareGiver[$cg['careGiverID']])): ?>
+                                                <span class="px-3 py-1 bg-green-100 text-green-800 text-sm rounded-full">
+                                                    <i class="fa-solid fa-calendar-check mr-1"></i>
+                                                    Available
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="px-3 py-1 bg-gray-100 text-gray-600 text-sm rounded-full">
+                                                    <i class="fa-solid fa-calendar-times mr-1"></i>
+                                                    No Slots
+                                                </span>
+                                            <?php endif; ?>
+                                            
+                                            <!-- Expand Arrow -->
+                                            <div class="expand-arrow transform transition-transform duration-200" id="arrow-<?php echo $cg['careGiverID']; ?>">
+                                                <i class="fa-solid fa-chevron-down text-gray-400"></i>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                            <?php else: ?>
-                                <div class="mt-4 p-3 bg-gray-100 rounded text-center">
-                                    <p class="text-sm text-gray-500">
-                                        <i class="fa-solid fa-calendar-times mr-2"></i>No available slots
-                                    </p>
+                            </div>
+                            
+                            <!-- Expanded Card Content -->
+                            <div id="expanded-<?php echo $cg['careGiverID']; ?>" class="expanded-content hidden border-t border-gray-200 p-4 bg-gray-50">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <!-- Left Column: Details -->
+                                    <div>
+                                        <h4 class="font-semibold text-gray-800 mb-3">Caregiver Details</h4>
+                                        <div class="space-y-2 text-sm">
+                                            <p><strong>Type:</strong> <?php echo htmlspecialchars($cg['careGiverType']); ?></p>
+                                            <?php if (!empty($cg['certifications'])): ?>
+                                                <p><strong>Certifications:</strong> <?php echo htmlspecialchars($cg['certifications']); ?></p>
+                                            <?php endif; ?>
+                                            <div class="grid grid-cols-3 gap-2 mt-3 p-3 bg-white rounded border">
+                                                <div class="text-center">
+                                                    <p class="text-xs text-gray-500">Daily</p>
+                                                    <p class="font-semibold text-green-600">৳<?php echo number_format($cg['dailyRate'], 0); ?></p>
+                                                </div>
+                                                <div class="text-center">
+                                                    <p class="text-xs text-gray-500">Weekly</p>
+                                                    <p class="font-semibold text-blue-600">৳<?php echo number_format($cg['weeklyRate'], 0); ?></p>
+                                                </div>
+                                                <div class="text-center">
+                                                    <p class="text-xs text-gray-500">Monthly</p>
+                                                    <p class="font-semibold text-purple-600">৳<?php echo number_format($cg['monthlyRate'], 0); ?></p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Right Column: Booking -->
+                                    <div>
+                                        <?php if (isset($availabilitiesByCareGiver[$cg['careGiverID']])): ?>
+                                            <h4 class="font-semibold text-gray-800 mb-3">Book This Caregiver</h4>
+                                            <form method="POST" id="booking-form-<?php echo $cg['careGiverID']; ?>">
+                                                <label class="block text-sm font-medium text-gray-700 mb-2">Select Time Slot:</label>
+                                                <select name="book_availability_id" class="w-full p-2 border border-gray-300 rounded-md mb-3" required onchange="updateBookingInfo(<?php echo $cg['careGiverID']; ?>, this.value)">
+                                                    <option value="">Choose an available slot...</option>
+                                                    <?php foreach ($availabilitiesByCareGiver[$cg['careGiverID']] as $slot): ?>
+                                                        <option value="<?php echo $slot['availabilityID']; ?>" 
+                                                                data-type="<?php echo $slot['bookingType']; ?>" 
+                                                                data-date="<?php echo formatDate($slot['startDate']); ?>"
+                                                                data-rate="<?php echo $cg[$slot['bookingType'] === 'Daily' ? 'dailyRate' : ($slot['bookingType'] === 'Weekly' ? 'weeklyRate' : 'monthlyRate')]; ?>">
+                                                            <?php echo $slot['bookingType']; ?> - <?php echo formatDate($slot['startDate']); ?>
+                                                        </option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                                
+                                                <div id="booking-info-<?php echo $cg['careGiverID']; ?>" class="mb-3 p-3 bg-blue-50 rounded-lg text-sm" style="display: none;">
+                                                    <div id="booking-details-<?php echo $cg['careGiverID']; ?>"></div>
+                                                </div>
+                                                
+                                                <button type="submit" class="w-full bg-dark-orchid text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed" 
+                                                        id="book-btn-<?php echo $cg['careGiverID']; ?>" disabled>
+                                                    <i class="fa-solid fa-calendar-plus mr-2"></i>Book This Caregiver
+                                                </button>
+                                            </form>
+                                        <?php else: ?>
+                                            <div class="text-center py-8">
+                                                <i class="fa-solid fa-calendar-times fa-3x text-gray-400 mb-3"></i>
+                                                <h4 class="font-semibold text-gray-600 mb-2">No Available Slots</h4>
+                                                <p class="text-sm text-gray-500">This caregiver doesn't have any available time slots at the moment.</p>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
                                 </div>
-                            <?php endif; ?>
+                            </div>
                         </div>
                         <?php endforeach; ?>
+                    </div>
+                    
+                    <!-- No Results Message -->
+                    <div id="no-results" class="text-center py-12 hidden">
+                        <i class="fa-solid fa-search fa-4x text-gray-400 mb-4"></i>
+                        <h3 class="text-lg font-semibold text-gray-900 mb-2">No caregivers found</h3>
+                        <p class="text-gray-600">Try adjusting your filters to see more results.</p>
                     </div>
                 </div>
             </div>
@@ -500,8 +609,97 @@ function getStatusColor($status) {
             activeTab.classList.add('border-dark-orchid', 'text-dark-orchid');
         }
 
-        function toggleBookingSection() {
-            showTab('available-caregivers');
+        function toggleFilters() {
+            const filterSection = document.getElementById('filter-section');
+            filterSection.classList.toggle('hidden');
+        }
+
+        function toggleCard(caregiverID) {
+            const expandedContent = document.getElementById(`expanded-${caregiverID}`);
+            const arrow = document.getElementById(`arrow-${caregiverID}`);
+            
+            if (expandedContent.classList.contains('hidden')) {
+                // Close all other cards first
+                document.querySelectorAll('.expanded-content').forEach(content => {
+                    content.classList.add('hidden');
+                });
+                document.querySelectorAll('.expand-arrow').forEach(arr => {
+                    arr.classList.remove('rotate-180');
+                });
+                
+                // Open this card
+                expandedContent.classList.remove('hidden');
+                arrow.classList.add('rotate-180');
+            } else {
+                // Close this card
+                expandedContent.classList.add('hidden');
+                arrow.classList.remove('rotate-180');
+            }
+        }
+
+        function applyFilters() {
+            const typeFilter = document.getElementById('type-filter').value;
+            const rateFilter = document.getElementById('rate-filter').value;
+            const availabilityFilter = document.getElementById('availability-filter').value;
+            
+            const cards = document.querySelectorAll('.caregiver-card');
+            let visibleCount = 0;
+            
+            cards.forEach(card => {
+                let show = true;
+                
+                // Type filter
+                if (typeFilter && card.dataset.type !== typeFilter) {
+                    show = false;
+                }
+                
+                // Rate filter
+                if (rateFilter && show) {
+                    const rate = parseFloat(card.dataset.rate);
+                    const [min, max] = rateFilter.split('-').map(Number);
+                    if (max) {
+                        show = rate >= min && rate <= max;
+                    } else {
+                        show = rate >= min;
+                    }
+                }
+                
+                // Availability filter
+                if (availabilityFilter && show) {
+                    show = card.dataset.availability === availabilityFilter;
+                }
+                
+                if (show) {
+                    card.style.display = 'block';
+                    visibleCount++;
+                } else {
+                    card.style.display = 'none';
+                    // Close expanded content if card is hidden
+                    const expandedContent = card.querySelector('.expanded-content');
+                    if (expandedContent) {
+                        expandedContent.classList.add('hidden');
+                    }
+                    const arrow = card.querySelector('.expand-arrow');
+                    if (arrow) {
+                        arrow.classList.remove('rotate-180');
+                    }
+                }
+            });
+            
+            // Show/hide no results message
+            const noResults = document.getElementById('no-results');
+            if (visibleCount === 0) {
+                noResults.classList.remove('hidden');
+            } else {
+                noResults.classList.add('hidden');
+            }
+        }
+
+        function clearFilters() {
+            document.getElementById('type-filter').value = '';
+            document.getElementById('rate-filter').value = '';
+            document.getElementById('availability-filter').value = '';
+            applyFilters();
         }
 
         function updateBookingInfo(caregiverID, availabilityID) {
@@ -522,10 +720,16 @@ function getStatusColor($status) {
             const rate = selectedOption.getAttribute('data-rate');
             
             detailsP.innerHTML = `
-                <strong>Booking Details:</strong><br>
-                Type: ${bookingType} Service<br>
-                Start Date: ${bookingDate}<br>
-                Total Cost: ৳${parseFloat(rate).toLocaleString('en-US', {minimumFractionDigits: 2})}
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="font-medium text-gray-800">${bookingType} Service</p>
+                        <p class="text-sm text-gray-600">Start: ${bookingDate}</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-lg font-bold text-dark-orchid">৳${parseFloat(rate).toLocaleString('en-US', {minimumFractionDigits: 0})}</p>
+                        <p class="text-xs text-gray-500">Total Cost</p>
+                    </div>
+                </div>
             `;
             
             infoDiv.style.display = 'block';
@@ -534,7 +738,7 @@ function getStatusColor($status) {
             // Add confirmation on submit
             const form = document.getElementById(`booking-form-${caregiverID}`);
             form.onsubmit = function(e) {
-                return confirm(`Confirm booking for ${bookingType} service starting ${bookingDate}?\nTotal cost: ৳${parseFloat(rate).toLocaleString('en-US', {minimumFractionDigits: 2})}`);
+                return confirm(`Confirm booking for ${bookingType} service starting ${bookingDate}?\n\nTotal cost: ৳${parseFloat(rate).toLocaleString('en-US', {minimumFractionDigits: 0})}`);
             };
         }
 
