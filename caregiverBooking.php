@@ -117,7 +117,7 @@ $conn->close();
 <body class="bg-purple-50">
      <div class="flex min-h-screen">
         <aside class="w-64 bg-white border-r">
-             <div class="p-6"><a href="#" class="text-2xl font-bold text-dark-orchid">CarePlus</a></div>
+             <div class="p-6"><a href="patientDashboard.php" class="text-2xl font-bold text-dark-orchid">CarePlus</a></div>
             <nav class="px-4 space-y-2">
                 <a href="patientDashboard.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
                     <i class="fa-solid fa-table-columns w-5"></i>

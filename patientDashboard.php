@@ -88,7 +88,7 @@ $conn->close();
         <!-- Sidebar -->
         <aside class="w-64 bg-white border-r">
             <div class="p-6">
-                <a href="#" class="text-2xl font-bold text-dark-orchid">CarePlus</a>
+                <a href="patientDashboard.php" class="text-2xl font-bold text-dark-orchid">CarePlus</a>
             </div>
             <nav class="px-4 space-y-2">
                 <a href="patientDashboard.php" class="flex items-center space-x-3 px-4 py-3 bg-purple-100 text-dark-orchid rounded-lg">

@@ -126,35 +126,37 @@ function formatDateTime($datetime) {
             transform: translateY(-2px);
             box-shadow: 0 10px 25px rgba(0,0,0,0.1);
         }
+        .bg-dark-orchid { background-color: #9932CC; }
+        .text-dark-orchid { color: #9932CC; }
+        .shadow-orchid-custom { box-shadow: 0 4px 6px -1px rgba(153, 50, 204, 0.1), 0 2px 4px -2px rgba(153, 50, 204, 0.1); }
     </style>
 </head>
-<body class="bg-gray-50 font-sans">
+<body class="bg-purple-50">
     <div class="flex min-h-screen">
         <!-- Sidebar -->
-        <aside class="w-64 bg-white shadow-lg">
-            <div class="gradient-bg text-white p-6">
-                <h2 class="text-2xl font-bold">CarePlus</h2>
-                <p class="text-sm opacity-90">Patient Portal</p>
+        <aside class="w-64 bg-white border-r">
+            <div class="p-6">
+                <a href="patientDashboard.php" class="text-2xl font-bold text-dark-orchid">CarePlus</a>
             </div>
             
-            <nav class="p-6 space-y-2">
+            <nav class="px-4 space-y-2">
                 <a href="patientDashboard.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
-                    <i class="fa-solid fa-house w-5"></i>
+                    <i class="fa-solid fa-table-columns w-5"></i>
                     <span>Dashboard</span>
                 </a>
                 <a href="patientProfile.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
-                    <i class="fa-solid fa-user w-5"></i>
+                    <i class="fa-regular fa-user w-5"></i>
                     <span>My Profile</span>
                 </a>
                 <a href="patientAppointments.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
                     <i class="fa-solid fa-calendar-days w-5"></i>
                     <span>My Appointments</span>
                 </a>
-                <a href="#" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
+                <a href="caregiverBooking.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
                     <i class="fa-solid fa-hands-holding-child w-5"></i>
-                    <span>My Caregiver Bookings</span>
+                    <span>Caregiver Bookings</span>
                 </a>
-                <a href="patientMedicalHistory.php" class="flex items-center space-x-3 px-4 py-3 bg-dark-orchid text-white rounded-lg">
+                <a href="patientMedicalHistory.php" class="flex items-center space-x-3 px-4 py-3 bg-purple-100 text-dark-orchid rounded-lg">
                     <i class="fa-solid fa-file-medical w-5"></i>
                     <span>Medical History</span>
                 </a>
