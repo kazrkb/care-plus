@@ -21,9 +21,6 @@ if ($conn->connect_error) {
 // Set a default timezone to ensure accurate date comparisons
 date_default_timezone_set('Asia/Dhaka');
 
-// --- (NEW) AUTOMATIC CLEANUP OF PAST SCHEDULES ---
-// NOTE: This runs every time the page loads. For a real application,
-// using a Cron Job is the recommended and more efficient method.
 $cleanupSql = "DELETE FROM schedule WHERE availableDate < CURDATE() OR (availableDate = CURDATE() AND endTime < CURTIME())";
 $conn->query($cleanupSql);
 // We don't need to show a message for this background task.
