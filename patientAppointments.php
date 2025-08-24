@@ -7,227 +7,73 @@ if (!isset($_SESSION['userID']) || $_SESSION['role'] !== 'Patient') {
     exit();
 }
 
-// --- Database Connection ---
+// Database Connection
 $conn = require_once 'config.php';
 
 $userName = $_SESSION['Name'];
 $userID = $_SESSION['userID'];
 $userAvatar = strtoupper(substr($userName, 0, 2));
 
-$successMsg = "";
-$errorMsg = "";
-
-// Handle appointment request submission
-if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['action']) && $_POST['action'] === 'request_appointment') {
-    $providerID = (int)$_POST['providerID'];
-    $appointmentDate = $_POST['appointmentDate'];
-    $appointmentTime = $_POST['appointmentTime'];
-    $notes = trim($_POST['notes']);
-    
-    // Combine date and time
-    $appointmentDateTime = $appointmentDate . ' ' . $appointmentTime;
-    
-    // Validate that the appointment is in the future
-    if (strtotime($appointmentDateTime) <= time()) {
-        $errorMsg = "Please select a future date and time for your appointment.";
-    } else {
-        // Check if provider exists and is available
-        $providerQuery = "SELECT u.userID, u.Name, u.role FROM users u WHERE u.userID = ? AND u.role IN ('Doctor', 'Nutritionist')";
-        $providerStmt = $conn->prepare($providerQuery);
-        $providerStmt->bind_param("i", $providerID);
-        $providerStmt->execute();
-        $providerResult = $providerStmt->get_result();
-        
-        if ($providerResult->num_rows > 0) {
-            // Insert appointment request
-            $insertQuery = "INSERT INTO appointment (patientID, providerID, appointmentDate, status, notes) VALUES (?, ?, ?, 'Requested', ?)";
-            $insertStmt = $conn->prepare($insertQuery);
-            $insertStmt->bind_param("iiss", $userID, $providerID, $appointmentDateTime, $notes);
-            
-            if ($insertStmt->execute()) {
-                $provider = $providerResult->fetch_assoc();
-                $successMsg = "Appointment request sent successfully to " . htmlspecialchars($provider['Name']) . "! You will be notified once it's approved.";
-            } else {
-                $errorMsg = "Failed to submit appointment request. Please try again.";
-            }
-            $insertStmt->close();
-        } else {
-            $errorMsg = "Selected provider is not available.";
-        }
-        $providerStmt->close();
-    }
-}
-
 // Handle appointment cancellation
-if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['action']) && $_POST['action'] === 'cancel') {
-    $appointmentID = (int)$_POST['appointmentID'];
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'cancel') {
+    $appointmentID = $_POST['appointmentID'];
     
-    // Verify that this appointment belongs to the current patient and is not already canceled
-    $verifyQuery = "SELECT appointmentID, status, appointmentDate FROM Appointment WHERE appointmentID = ? AND patientID = ? AND status != 'Canceled'";
-    $verifyStmt = $conn->prepare($verifyQuery);
-    $verifyStmt->bind_param("ii", $appointmentID, $userID);
-    $verifyStmt->execute();
-    $verifyResult = $verifyStmt->get_result();
+    // Update appointment status to canceled
+    $cancelQuery = "UPDATE appointment SET status = 'Canceled' WHERE appointmentID = ? AND patientID = ?";
+    $cancelStmt = $conn->prepare($cancelQuery);
+    $cancelStmt->bind_param("ii", $appointmentID, $userID);
     
-    if ($verifyResult->num_rows > 0) {
-        $appointment = $verifyResult->fetch_assoc();
+    if ($cancelStmt->execute()) {
+        // Update associated schedule back to available if it exists
+        $updateScheduleQuery = "UPDATE schedule s 
+                               INNER JOIN appointment a ON s.scheduleID = a.scheduleID 
+                               SET s.status = 'Available' 
+                               WHERE a.appointmentID = ?";
+        $updateScheduleStmt = $conn->prepare($updateScheduleQuery);
+        $updateScheduleStmt->bind_param("i", $appointmentID);
+        $updateScheduleStmt->execute();
         
-        // Check if appointment is in the future
-        if (strtotime($appointment['appointmentDate']) > time()) {
-            // Update appointment status to 'Canceled'
-            $cancelQuery = "UPDATE Appointment SET status = 'Canceled' WHERE appointmentID = ?";
-            $cancelStmt = $conn->prepare($cancelQuery);
-            $cancelStmt->bind_param("i", $appointmentID);
-            
-            if ($cancelStmt->execute()) {
-                $successMsg = "Appointment has been successfully canceled.";
-            } else {
-                $errorMsg = "Failed to cancel appointment. Please try again.";
-            }
-            $cancelStmt->close();
-        } else {
-            $errorMsg = "Cannot cancel past appointments.";
-        }
+        $success_message = "Appointment canceled successfully.";
     } else {
-        $errorMsg = "Appointment not found or cannot be canceled.";
+        $error_message = "Failed to cancel appointment.";
     }
-    $verifyStmt->close();
 }
 
-// Get filter parameter
-$filter = isset($_GET['filter']) ? $_GET['filter'] : 'all';
-
-// Build query based on filter
-$baseQuery = "SELECT a.appointmentID, a.appointmentDate, a.status, a.consultation_link, a.notes, 
-              u.Name as providerName, u.role as providerRole 
-              FROM Appointment a 
-              LEFT JOIN Users u ON a.providerID = u.userID 
-              WHERE a.patientID = ?";
-
-switch ($filter) {
-    case 'upcoming':
-        $query = $baseQuery . " AND a.appointmentDate >= NOW() AND a.status IN ('Scheduled', 'Requested') AND a.status != 'Canceled' ORDER BY a.appointmentDate ASC";
-        break;
-    case 'requested':
-        $query = $baseQuery . " AND a.status = 'Requested' ORDER BY a.appointmentDate ASC";
-        break;
-    case 'past':
-        $query = $baseQuery . " AND a.appointmentDate < NOW() AND a.status IN ('Completed', 'Denied') ORDER BY a.appointmentDate DESC";
-        break;
-    case 'canceled':
-        $query = $baseQuery . " AND a.status = 'Canceled' ORDER BY a.appointmentDate DESC";
-        break;
-    default:
-        $query = $baseQuery . " ORDER BY a.appointmentDate DESC";
-}
-
-$stmt = $conn->prepare($query);
-$stmt->bind_param("i", $userID);
-$stmt->execute();
-$appointments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-
-// Get appointment counts for filter tabs
-$countsQuery = "SELECT 
-    COUNT(*) as total,
-    SUM(CASE WHEN appointmentDate >= NOW() AND status IN ('Scheduled', 'Requested') AND status != 'Canceled' THEN 1 ELSE 0 END) as upcoming,
-    SUM(CASE WHEN status = 'Requested' THEN 1 ELSE 0 END) as requested,
-    SUM(CASE WHEN appointmentDate < NOW() AND status IN ('Completed', 'Denied') THEN 1 ELSE 0 END) as past,
-    SUM(CASE WHEN status = 'Canceled' THEN 1 ELSE 0 END) as canceled
-    FROM Appointment WHERE patientID = ?";
-$countsStmt = $conn->prepare($countsQuery);
-$countsStmt->bind_param("i", $userID);
-$countsStmt->execute();
-$counts = $countsStmt->get_result()->fetch_assoc();
-
-// Get available providers (doctors and nutritionists) with their schedules
-$providersQuery = "
-    SELECT DISTINCT u.userID, u.Name, u.role, d.specialty, d.consultationFees, 'Doctor' as provider_type
-    FROM users u 
-    JOIN doctor d ON u.userID = d.doctorID 
-    LEFT JOIN schedule s ON u.userID = s.providerID 
-    WHERE u.role = 'Doctor' AND (s.scheduleID IS NULL OR s.availableDate >= CURDATE())
-    UNION
-    SELECT u.userID, u.Name, u.role, n.specialty, n.consultationFees, 'Nutritionist' as provider_type
-    FROM users u 
-    JOIN nutritionist n ON u.userID = n.nutritionistID 
-    WHERE u.role = 'Nutritionist'
-    ORDER BY provider_type, Name
+// Get all appointments for the patient
+$appointmentsQuery = "
+    SELECT 
+        a.appointmentID,
+        a.appointmentDate,
+        a.status,
+        a.consultation_link,
+        a.notes,
+        u.Name as providerName,
+        u.role as providerRole,
+        CASE 
+            WHEN u.role = 'Doctor' THEN d.specialty
+            WHEN u.role = 'Nutritionist' THEN n.specialty
+            ELSE 'N/A'
+        END as specialty,
+        CASE 
+            WHEN u.role = 'Doctor' THEN d.consultationFees
+            WHEN u.role = 'Nutritionist' THEN n.consultationFees
+            ELSE 0
+        END as consultationFees
+    FROM appointment a
+    INNER JOIN users u ON a.providerID = u.userID
+    LEFT JOIN doctor d ON u.userID = d.doctorID AND u.role = 'Doctor'
+    LEFT JOIN nutritionist n ON u.userID = n.nutritionistID AND u.role = 'Nutritionist'
+    WHERE a.patientID = ?
+    ORDER BY a.appointmentDate DESC
 ";
 
-$providersStmt = $conn->prepare($providersQuery);
-$providersStmt->execute();
-$providers = $providersStmt->get_result()->fetch_all(MYSQLI_ASSOC);
-
-// Get available schedules for dynamic time slot generation
-$schedulesQuery = "SELECT providerID, availableDate, startTime, endTime FROM schedule WHERE availableDate >= CURDATE() AND status = 'Available'";
-$schedulesResult = $conn->query($schedulesQuery);
-$schedules = [];
-if ($schedulesResult) {
-    while ($row = $schedulesResult->fetch_assoc()) {
-        $schedules[$row['providerID']][] = $row;
-    }
-}
+$appointmentsStmt = $conn->prepare($appointmentsQuery);
+$appointmentsStmt->bind_param("i", $userID);
+$appointmentsStmt->execute();
+$appointmentsResult = $appointmentsStmt->get_result();
+$appointments = $appointmentsResult->fetch_all(MYSQLI_ASSOC);
 
 $conn->close();
-
-// Generate time slots (9 AM to 5 PM)
-function generateTimeSlots() {
-    $slots = [];
-    for ($hour = 9; $hour <= 17; $hour++) {
-        $slots[] = sprintf("%02d:00", $hour);
-        if ($hour < 17) {
-            $slots[] = sprintf("%02d:30", $hour);
-        }
-    }
-    return $slots;
-}
-
-$timeSlots = generateTimeSlots();
-
-// Helper function to format status
-function getStatusBadge($status) {
-    switch (strtolower($status)) {
-        case 'requested':
-            return '<span class="px-2 py-1 text-xs font-semibold bg-yellow-100 text-yellow-800 rounded-full">Requested</span>';
-        case 'scheduled':
-            return '<span class="px-2 py-1 text-xs font-semibold bg-blue-100 text-blue-800 rounded-full">Scheduled</span>';
-        case 'completed':
-            return '<span class="px-2 py-1 text-xs font-semibold bg-green-100 text-green-800 rounded-full">Completed</span>';
-        case 'canceled':
-            return '<span class="px-2 py-1 text-xs font-semibold bg-red-100 text-red-800 rounded-full">Canceled</span>';
-        case 'denied':
-            return '<span class="px-2 py-1 text-xs font-semibold bg-red-100 text-red-800 rounded-full">Denied</span>';
-        case 'in-progress':
-            return '<span class="px-2 py-1 text-xs font-semibold bg-purple-100 text-purple-800 rounded-full">In Progress</span>';
-        default:
-            return '<span class="px-2 py-1 text-xs font-semibold bg-gray-100 text-gray-800 rounded-full">' . htmlspecialchars($status) . '</span>';
-    }
-}
-
-// Helper function to format date
-function formatAppointmentDate($datetime) {
-    $date = new DateTime($datetime);
-    $now = new DateTime();
-    $diff = $now->diff($date);
-    
-    if ($date > $now) {
-        if ($diff->days == 0) {
-            return 'Today at ' . $date->format('g:i A');
-        } elseif ($diff->days == 1) {
-            return 'Tomorrow at ' . $date->format('g:i A');
-        } else {
-            return $date->format('M j, Y \a\t g:i A');
-        }
-    } else {
-        if ($diff->days == 0) {
-            return 'Today at ' . $date->format('g:i A');
-        } elseif ($diff->days == 1) {
-            return 'Yesterday at ' . $date->format('g:i A');
-        } else {
-            return $date->format('M j, Y \a\t g:i A');
-        }
-    }
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -248,31 +94,9 @@ function formatAppointmentDate($datetime) {
         }
         .appointment-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px -5px rgba(153, 50, 204, 0.15);
-        }
-        .cancel-form {
-            display: inline-block;
-        }
-        .cancel-btn:hover {
-            background-color: #fef2f2;
-            border-color: #fca5a5;
+            box-shadow: 0 8px 25px -5px rgba(0, 0, 0, 0.1);
         }
     </style>
-    <script>
-        // Auto-hide success/error messages after 5 seconds
-        document.addEventListener('DOMContentLoaded', function() {
-            const alerts = document.querySelectorAll('.alert-auto-hide');
-            alerts.forEach(function(alert) {
-                setTimeout(function() {
-                    alert.style.transition = 'opacity 0.5s';
-                    alert.style.opacity = '0';
-                    setTimeout(function() {
-                        alert.remove();
-                    }, 500);
-                }, 5000);
-            });
-        });
-    </script>
 </head>
 <body class="bg-purple-50">
     <div class="flex min-h-screen">
@@ -315,12 +139,13 @@ function formatAppointmentDate($datetime) {
             <header class="flex justify-between items-center mb-8">
                 <div>
                     <h1 class="text-3xl font-bold text-slate-800">My Appointments</h1>
-                    <p class="text-gray-600 mt-1">View and manage your healthcare appointments</p>
+                    <p class="text-gray-600 mt-1">Manage your appointments with doctors and nutritionists</p>
                 </div>
                 <div class="flex items-center space-x-4">
-                    <button onclick="openProviderSelectionModal()" class="bg-dark-orchid text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition">
-                        <i class="fa-solid fa-calendar-plus mr-2"></i>New Appointment
-                    </button>
+                    <a href="bookAppointment.php" class="bg-dark-orchid text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors">
+                        <i class="fa-solid fa-plus mr-2"></i>
+                        Book New Appointment
+                    </a>
                     <div class="text-right">
                         <p class="font-semibold text-slate-700"><?php echo htmlspecialchars($userName); ?></p>
                         <p class="text-sm text-gray-500">Patient</p>
@@ -331,898 +156,237 @@ function formatAppointmentDate($datetime) {
                 </div>
             </header>
 
-            <!-- Modern Notifications -->
-            <?php if ($successMsg): ?>
-            <div class="alert-notification fixed top-4 right-4 z-50 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg transform translate-x-0 transition-all duration-300 ease-in-out" id="success-alert">
-                <div class="flex items-center">
-                    <i class="fa-solid fa-check-circle mr-2"></i>
-                    <span class="text-sm font-medium"><?php echo $successMsg; ?></span>
-                    <button onclick="dismissAlert('success-alert')" class="ml-4 text-green-200 hover:text-white">
-                        <i class="fa-solid fa-times"></i>
-                    </button>
+            <!-- Success/Error Messages -->
+            <?php if (isset($success_message)): ?>
+                <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6" role="alert">
+                    <div class="flex">
+                        <div class="py-1">
+                            <i class="fa-solid fa-check-circle mr-2"></i>
+                            <?php echo htmlspecialchars($success_message); ?>
+                        </div>
+                    </div>
                 </div>
-            </div>
             <?php endif; ?>
 
-            <?php if ($errorMsg): ?>
-            <div class="alert-notification fixed top-4 right-4 z-50 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg transform translate-x-0 transition-all duration-300 ease-in-out" id="error-alert">
-                <div class="flex items-center">
-                    <i class="fa-solid fa-exclamation-circle mr-2"></i>
-                    <span class="text-sm font-medium"><?php echo $errorMsg; ?></span>
-                    <button onclick="dismissAlert('error-alert')" class="ml-4 text-red-200 hover:text-white">
-                        <i class="fa-solid fa-times"></i>
-                    </button>
+            <?php if (isset($error_message)): ?>
+                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6" role="alert">
+                    <div class="flex">
+                        <div class="py-1">
+                            <i class="fa-solid fa-exclamation-circle mr-2"></i>
+                            <?php echo htmlspecialchars($error_message); ?>
+                        </div>
+                    </div>
                 </div>
-            </div>
             <?php endif; ?>
 
-            <!-- Filter Tabs -->
+            <!-- Appointment Tabs -->
             <div class="mb-6">
                 <div class="border-b border-gray-200">
-                    <nav class="-mb-px flex space-x-8">
-                        <a href="?filter=all" class="<?php echo $filter == 'all' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'; ?> whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
-                            All Appointments
-                            <span class="ml-2 bg-gray-100 text-gray-900 py-0.5 px-2.5 rounded-full text-xs"><?php echo $counts['total']; ?></span>
-                        </a>
-                        <a href="?filter=upcoming" class="<?php echo $filter == 'upcoming' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'; ?> whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
+                    <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                        <button onclick="showTab('upcoming')" id="upcoming-tab" class="border-dark-orchid text-dark-orchid whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
                             Upcoming
-                            <span class="ml-2 bg-blue-100 text-blue-900 py-0.5 px-2.5 rounded-full text-xs"><?php echo $counts['upcoming']; ?></span>
-                        </a>
-                        <a href="?filter=requested" class="<?php echo $filter == 'requested' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'; ?> whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
-                            Pending Approval
-                            <span class="ml-2 bg-yellow-100 text-yellow-900 py-0.5 px-2.5 rounded-full text-xs"><?php echo $counts['requested']; ?></span>
-                        </a>
-                        <a href="?filter=past" class="<?php echo $filter == 'past' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'; ?> whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
-                            Past
-                            <span class="ml-2 bg-green-100 text-green-900 py-0.5 px-2.5 rounded-full text-xs"><?php echo $counts['past']; ?></span>
-                        </a>
-                        <a href="?filter=canceled" class="<?php echo $filter == 'canceled' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'; ?> whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
+                        </button>
+                        <button onclick="showTab('completed')" id="completed-tab" class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
+                            Completed
+                        </button>
+                        <button onclick="showTab('canceled')" id="canceled-tab" class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
                             Canceled
-                            <span class="ml-2 bg-red-100 text-red-900 py-0.5 px-2.5 rounded-full text-xs"><?php echo $counts['canceled']; ?></span>
-                        </a>
+                        </button>
                     </nav>
                 </div>
             </div>
 
-            <!-- Appointments List -->
-            <?php if (empty($appointments)): ?>
-            <div class="text-center py-12 bg-white rounded-lg shadow-orchid-custom">
-                <i class="fa-solid fa-calendar-xmark fa-4x text-gray-400 mb-4"></i>
-                <h3 class="text-lg font-semibold text-gray-600 mb-2">No appointments found</h3>
-                <p class="text-gray-500">
-                    <?php 
-                    switch ($filter) {
-                        case 'upcoming': echo "You don't have any upcoming appointments."; break;
-                        case 'past': echo "You don't have any past appointments."; break;
-                        case 'canceled': echo "You don't have any canceled appointments."; break;
-                        default: echo "You haven't scheduled any appointments yet.";
-                    }
-                    ?>
-                </p>
-            </div>
-            <?php else: ?>
-            <div class="space-y-4">
-                <?php foreach ($appointments as $appointment): ?>
-                <div class="appointment-card bg-white p-6 rounded-lg shadow-orchid-custom">
-                    <div class="flex items-start justify-between">
-                        <div class="flex-1">
-                            <div class="flex items-center space-x-3 mb-2">
-                                <div class="flex items-center space-x-2">
-                                    <?php if ($appointment['providerRole'] == 'Doctor'): ?>
-                                        <i class="fa-solid fa-user-doctor text-blue-600"></i>
-                                        <span class="text-sm text-blue-600 font-medium">Doctor</span>
-                                    <?php elseif ($appointment['providerRole'] == 'Nutritionist'): ?>
-                                        <i class="fa-solid fa-utensils text-green-600"></i>
-                                        <span class="text-sm text-green-600 font-medium">Nutritionist</span>
-                                    <?php else: ?>
-                                        <i class="fa-solid fa-user-nurse text-purple-600"></i>
-                                        <span class="text-sm text-purple-600 font-medium">Healthcare Provider</span>
+            <!-- Appointments Grid -->
+            <div id="appointments-container">
+                <?php if (empty($appointments)): ?>
+                    <div class="text-center py-12">
+                        <i class="fa-solid fa-calendar-xmark fa-4x text-gray-400 mb-4"></i>
+                        <h3 class="text-xl font-semibold text-gray-600 mb-2">No Appointments Found</h3>
+                        <p class="text-gray-500 mb-6">You haven't booked any appointments yet.</p>
+                        <a href="bookAppointment.php" class="bg-dark-orchid text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors">
+                            <i class="fa-solid fa-plus mr-2"></i>
+                            Book Your First Appointment
+                        </a>
+                    </div>
+                <?php else: ?>
+                    <div class="grid gap-6" id="appointments-grid">
+                        <?php foreach ($appointments as $appointment): 
+                            $statusClass = '';
+                            $statusIcon = '';
+                            switch($appointment['status']) {
+                                case 'Scheduled':
+                                    $statusClass = 'bg-blue-100 text-blue-800';
+                                    $statusIcon = 'fa-clock';
+                                    break;
+                                case 'Completed':
+                                    $statusClass = 'bg-green-100 text-green-800';
+                                    $statusIcon = 'fa-check-circle';
+                                    break;
+                                case 'Canceled':
+                                    $statusClass = 'bg-red-100 text-red-800';
+                                    $statusIcon = 'fa-times-circle';
+                                    break;
+                                case 'Denied':
+                                    $statusClass = 'bg-gray-100 text-gray-800';
+                                    $statusIcon = 'fa-ban';
+                                    break;
+                                default:
+                                    $statusClass = 'bg-gray-100 text-gray-800';
+                                    $statusIcon = 'fa-question-circle';
+                            }
+                            
+                            $appointmentDateTime = new DateTime($appointment['appointmentDate']);
+                            $isUpcoming = $appointmentDateTime > new DateTime() && $appointment['status'] === 'Scheduled';
+                            $isPast = $appointmentDateTime <= new DateTime();
+                        ?>
+                            <div class="appointment-card bg-white rounded-lg shadow-orchid-custom p-6 appointment-item" data-status="<?php echo strtolower($appointment['status']); ?>">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div class="flex-1">
+                                        <div class="flex items-center mb-2">
+                                            <h3 class="text-xl font-semibold text-slate-800 mr-3">
+                                                <?php echo htmlspecialchars($appointment['providerName']); ?>
+                                            </h3>
+                                            <span class="<?php echo $statusClass; ?> px-3 py-1 rounded-full text-xs font-medium">
+                                                <i class="fa-solid <?php echo $statusIcon; ?> mr-1"></i>
+                                                <?php echo ucfirst($appointment['status']); ?>
+                                            </span>
+                                        </div>
+                                        <div class="flex items-center text-gray-600 mb-2">
+                                            <i class="fa-solid fa-user-md mr-2"></i>
+                                            <span class="capitalize"><?php echo strtolower($appointment['providerRole']); ?></span>
+                                            <?php if ($appointment['specialty']): ?>
+                                                <span class="mx-2">•</span>
+                                                <span><?php echo htmlspecialchars($appointment['specialty']); ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div class="flex items-center text-gray-600 mb-2">
+                                            <i class="fa-solid fa-calendar mr-2"></i>
+                                            <span><?php echo $appointmentDateTime->format('l, F j, Y'); ?></span>
+                                            <span class="mx-2">•</span>
+                                            <i class="fa-solid fa-clock mr-1"></i>
+                                            <span><?php echo $appointmentDateTime->format('g:i A'); ?></span>
+                                        </div>
+                                        <?php if ($appointment['consultationFees']): ?>
+                                            <div class="flex items-center text-gray-600">
+                                                <i class="fa-solid fa-money-bill mr-2"></i>
+                                                <span>৳<?php echo number_format($appointment['consultationFees'], 0); ?></span>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+
+                                <?php if ($appointment['notes']): ?>
+                                    <div class="bg-gray-50 p-4 rounded-lg mb-4">
+                                        <h4 class="font-medium text-gray-700 mb-2">Notes:</h4>
+                                        <p class="text-gray-600 text-sm"><?php echo htmlspecialchars($appointment['notes']); ?></p>
+                                    </div>
+                                <?php endif; ?>
+
+                                <div class="flex justify-between items-center pt-4 border-t border-gray-200">
+                                    <div class="flex space-x-3">
+                                        <?php if ($appointment['consultation_link'] && $appointment['status'] === 'Scheduled'): ?>
+                                            <a href="<?php echo htmlspecialchars($appointment['consultation_link']); ?>" 
+                                               target="_blank"
+                                               class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-700 transition-colors">
+                                                <i class="fa-solid fa-video mr-2"></i>
+                                                Join Meeting
+                                            </a>
+                                        <?php endif; ?>
+                                        
+                                        <?php if ($appointment['status'] === 'Completed'): ?>
+                                            <a href="patientMedicalHistory.php#prescriptions" 
+                                               class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition-colors">
+                                                <i class="fa-solid fa-prescription mr-2"></i>
+                                                View Prescription
+                                            </a>
+                                        <?php endif; ?>
+                                    </div>
+                                    
+                                    <?php if ($appointment['status'] === 'Scheduled' && !$isPast): ?>
+                                        <form method="POST" class="inline" onsubmit="return confirm('Are you sure you want to cancel this appointment?');">
+                                            <input type="hidden" name="action" value="cancel">
+                                            <input type="hidden" name="appointmentID" value="<?php echo $appointment['appointmentID']; ?>">
+                                            <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-700 transition-colors">
+                                                <i class="fa-solid fa-times mr-2"></i>
+                                                Cancel
+                                            </button>
+                                        </form>
                                     <?php endif; ?>
                                 </div>
-                                <?php echo getStatusBadge($appointment['status']); ?>
                             </div>
-                            
-                            <h3 class="text-lg font-semibold text-slate-800 mb-1">
-                                <?php echo htmlspecialchars($appointment['providerName'] ?? 'Provider Not Assigned'); ?>
-                            </h3>
-                            
-                            <div class="flex items-center space-x-4 text-gray-600 mb-3">
-                                <div class="flex items-center space-x-1">
-                                    <i class="fa-solid fa-calendar-days text-sm"></i>
-                                    <span class="text-sm"><?php echo formatAppointmentDate($appointment['appointmentDate']); ?></span>
-                                </div>
-                                <div class="flex items-center space-x-1">
-                                    <i class="fa-solid fa-hashtag text-sm"></i>
-                                    <span class="text-sm">ID: <?php echo $appointment['appointmentID']; ?></span>
-                                </div>
-                            </div>
-
-                            <?php if (!empty($appointment['notes'])): ?>
-                            <div class="bg-gray-50 p-3 rounded-lg">
-                                <p class="text-sm text-gray-700">
-                                    <i class="fa-solid fa-sticky-note mr-1"></i>
-                                    <strong>Notes:</strong> <?php echo htmlspecialchars($appointment['notes']); ?>
-                                </p>
-                            </div>
-                            <?php endif; ?>
-                        </div>
-
-                        <div class="flex flex-col space-y-2 ml-4">
-                            <?php if (!empty($appointment['consultation_link']) && $appointment['status'] != 'Canceled'): ?>
-                            <a href="<?php echo htmlspecialchars($appointment['consultation_link']); ?>" 
-                               target="_blank"
-                               class="px-4 py-2 bg-dark-orchid text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition text-center">
-                                <i class="fa-solid fa-video mr-1"></i>Join Consultation
-                            </a>
-                            <?php endif; ?>
-                            
-                            <?php if (strtotime($appointment['appointmentDate']) > time() && $appointment['status'] != 'Canceled'): ?>
-                            <form method="POST" class="cancel-form">
-                                <input type="hidden" name="action" value="cancel">
-                                <input type="hidden" name="appointmentID" value="<?php echo $appointment['appointmentID']; ?>">
-                                <button type="button" 
-                                        onclick="confirmCancel('<?php echo $appointment['appointmentID']; ?>', '<?php echo htmlspecialchars($appointment['providerName'], ENT_QUOTES); ?>', '<?php echo formatAppointmentDate($appointment['appointmentDate']); ?>')"
-                                        class="cancel-btn px-4 py-2 border border-red-300 text-red-700 rounded-lg text-sm font-medium hover:bg-red-50 transition">
-                                    <i class="fa-solid fa-calendar-xmark mr-1"></i>Cancel
-                                </button>
-                            </form>
-                            <?php endif; ?>
-                        </div>
+                        <?php endforeach; ?>
                     </div>
-                </div>
-                <?php endforeach; ?>
+                <?php endif; ?>
             </div>
-            <?php endif; ?>
         </main>
     </div>
 
-    <!-- Provider Selection Modal -->
-    <div id="providerSelectionModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-40">
-        <div class="flex items-center justify-center min-h-screen p-4">
-            <div class="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto">
-                <div class="p-6">
-                    <!-- Modal Header -->
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-2xl font-bold text-slate-800">Select Healthcare Provider</h2>
-                        <button onclick="closeProviderSelectionModal()" class="text-gray-400 hover:text-gray-600">
-                            <i class="fa-solid fa-times fa-xl"></i>
-                        </button>
-                    </div>
-
-                    <!-- Filter Section -->
-                    <div class="mb-6">
-                        <div class="flex justify-between items-center mb-4">
-                            <h3 class="text-lg font-semibold text-slate-800">Available Providers</h3>
-                            <button onclick="toggleProviderFilters()" class="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition">
-                                <i class="fa-solid fa-filter mr-2"></i>Filters
-                            </button>
-                        </div>
-                        
-                        <!-- Filter Controls -->
-                        <div id="provider-filter-section" class="mb-4 p-4 bg-gray-50 rounded-lg hidden">
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Provider Type</label>
-                                    <select id="provider-type-filter" class="w-full p-2 border border-gray-300 rounded-md" onchange="applyProviderFilters()">
-                                        <option value="">All Types</option>
-                                        <option value="Doctor">Doctor</option>
-                                        <option value="Nutritionist">Nutritionist</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Specialty</label>
-                                    <select id="specialty-filter" class="w-full p-2 border border-gray-300 rounded-md" onchange="applyProviderFilters()">
-                                        <option value="">All Specialties</option>
-                                        <option value="Cardiology">Cardiology</option>
-                                        <option value="General Medicine">General Medicine</option>
-                                        <option value="Public Health Nutrition">Public Health Nutrition</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Consultation Fee</label>
-                                    <select id="fee-filter" class="w-full p-2 border border-gray-300 rounded-md" onchange="applyProviderFilters()">
-                                        <option value="">All Fees</option>
-                                        <option value="0-600">৳0 - ৳600</option>
-                                        <option value="600-800">৳600 - ৳800</option>
-                                        <option value="800-1000">৳800+</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="mt-4 flex justify-end">
-                                <button onclick="clearProviderFilters()" class="text-sm text-gray-600 hover:text-gray-800">Clear All Filters</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Providers List -->
-                    <div class="space-y-4 max-h-96 overflow-y-auto" id="providers-container">
-                        <!-- Debug Info -->
-                        <div class="text-sm text-gray-500 mb-4 bg-blue-50 p-3 rounded">
-                            📊 Found <strong><?php echo count($providers); ?></strong> healthcare providers
-                        </div>
-                        
-                        <?php if (empty($providers)): ?>
-                            <div class="text-center py-8">
-                                <i class="fa-solid fa-user-doctor fa-3x text-gray-400 mb-4"></i>
-                                <h3 class="text-lg font-semibold text-gray-600 mb-2">No Providers Available</h3>
-                                <p class="text-gray-500">Please check the database connection or contact support.</p>
-                            </div>
-                        <?php else: ?>
-                        
-                        <?php foreach ($providers as $provider): ?>
-                        <div class="provider-card border border-gray-200 rounded-lg hover:shadow-md transition-shadow cursor-pointer" 
-                             data-type="<?php echo htmlspecialchars($provider['role']); ?>" 
-                             data-specialty="<?php echo htmlspecialchars($provider['specialty']); ?>"
-                             data-fee="<?php echo $provider['consultationFees']; ?>"
-                             onclick="selectProviderForAppointment(<?php echo $provider['userID']; ?>, '<?php echo htmlspecialchars($provider['Name']); ?>', '<?php echo htmlspecialchars($provider['role']); ?>')">
-                            
-                            <!-- Provider Card -->
-                            <div class="p-4">
-                                <div class="flex items-center justify-between">
-                                    <div class="flex items-center space-x-4 flex-1">
-                                        <!-- Provider Icon -->
-                                        <div class="flex-shrink-0">
-                                            <?php if ($provider['role'] == 'Doctor'): ?>
-                                                <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                                                    <i class="fa-solid fa-user-doctor text-blue-600 fa-lg"></i>
-                                                </div>
-                                            <?php else: ?>
-                                                <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                                                    <i class="fa-solid fa-utensils text-green-600 fa-lg"></i>
-                                                </div>
-                                            <?php endif; ?>
-                                        </div>
-                                        
-                                        <!-- Provider Info -->
-                                        <div class="flex-1">
-                                            <div class="flex items-center space-x-3 mb-1">
-                                                <h3 class="text-lg font-semibold text-slate-800"><?php echo htmlspecialchars($provider['Name']); ?></h3>
-                                                <span class="px-2 py-1 text-xs rounded-full font-medium
-                                                    <?php echo $provider['role'] == 'Doctor' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'; ?>">
-                                                    <?php echo htmlspecialchars($provider['role']); ?>
-                                                </span>
-                                            </div>
-                                            <div class="flex items-center space-x-6">
-                                                <p class="text-sm text-gray-600">
-                                                    <i class="fa-solid fa-stethoscope mr-1"></i>
-                                                    <?php echo htmlspecialchars($provider['specialty']); ?>
-                                                </p>
-                                                <p class="text-sm font-semibold text-gray-700">
-                                                    <i class="fa-solid fa-dollar-sign mr-1"></i>
-                                                    Fee: ৳<?php echo number_format($provider['consultationFees'], 0); ?>
-                                                </p>
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- Selection Indicator -->
-                                        <div class="provider-selection-indicator hidden">
-                                            <i class="fa-solid fa-check-circle text-green-600 fa-lg"></i>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <?php endforeach; ?>
-                        
-                        <?php endif; // End if providers available check ?>
-                    </div>
-                    
-                    <!-- No Results Message -->
-                    <div id="no-providers-results" class="text-center py-12 hidden">
-                        <i class="fa-solid fa-search fa-4x text-gray-400 mb-4"></i>
-                        <h3 class="text-lg font-semibold text-gray-900 mb-2">No providers found</h3>
-                        <p class="text-gray-600">Try adjusting your filters to see more results.</p>
-                    </div>
-                    
-                    <!-- Modal Footer -->
-                    <div class="flex justify-between items-center pt-4 border-t mt-6">
-                        <div id="selected-provider-info" class="text-sm text-gray-600 hidden">
-                            <span id="selected-provider-details"></span>
-                        </div>
-                        <div class="flex space-x-3">
-                            <button type="button" onclick="closeProviderSelectionModal()" 
-                                    class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
-                                Cancel
-                            </button>
-                            <button type="button" onclick="proceedToAppointmentBooking()" id="proceed-btn"
-                                    class="bg-dark-orchid text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                    disabled>
-                                <i class="fa-solid fa-arrow-right mr-2"></i>Continue to Book
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Appointment Booking Modal -->
-    <div id="appointmentBookingModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
-        <div class="flex items-center justify-center min-h-screen p-4">
-            <div class="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                <div class="p-6">
-                    <!-- Modal Header -->
-                    <div class="flex justify-between items-center mb-6">
-                        <div>
-                            <h2 class="text-2xl font-bold text-slate-800">Book Appointment</h2>
-                            <p class="text-sm text-gray-600 mt-1">with <span id="booking-provider-name" class="font-medium"></span></p>
-                        </div>
-                        <button onclick="closeAppointmentBookingModal()" class="text-gray-400 hover:text-gray-600">
-                            <i class="fa-solid fa-times fa-xl"></i>
-                        </button>
-                    </div>
-
-                    <!-- Booking Form -->
-                    <form method="POST" id="appointmentForm" class="space-y-6">
-                        <input type="hidden" name="action" value="request_appointment">
-                        <input type="hidden" name="providerID" id="booking-providerID">
-
-                        <!-- Provider Summary -->
-                        <div class="bg-purple-50 p-4 rounded-lg">
-                            <div class="flex items-center space-x-3">
-                                <div id="booking-provider-icon"></div>
-                                <div>
-                                    <h3 class="font-semibold text-slate-800" id="booking-provider-title"></h3>
-                                    <p class="text-sm text-gray-600" id="booking-provider-specialty"></p>
-                                    <p class="text-sm font-medium text-gray-700">Consultation Fee: ৳<span id="booking-provider-fee"></span></p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Date & Time Selection -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Appointment Date</label>
-                                <input type="date" name="appointmentDate" 
-                                       min="<?php echo date('Y-m-d', strtotime('+1 day')); ?>"
-                                       max="<?php echo date('Y-m-d', strtotime('+30 days')); ?>"
-                                       class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" 
-                                       required onchange="updateAvailableTimeSlots(); checkAppointmentFormValidity()">
-                            </div>
-                            
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Available Time</label>
-                                <select name="appointmentTime" id="appointmentTimeSelect" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" required onchange="checkAppointmentFormValidity()">
-                                    <option value="">First select a date</option>
-                                </select>
-                                <div id="no-slots-message" class="hidden mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                                    <p class="text-sm text-yellow-800">
-                                        <i class="fa-solid fa-exclamation-triangle mr-2"></i>
-                                        No available time slots for selected date. Please choose another date or contact the provider directly.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Notes -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Additional Notes (Optional)</label>
-                            <textarea name="notes" rows="3" 
-                                      class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                                      placeholder="Describe your health concerns or specific requirements..."></textarea>
-                        </div>
-
-                        <!-- Modal Footer -->
-                        <div class="flex justify-between pt-4 border-t">
-                            <button type="button" onclick="backToProviderSelection()" 
-                                    class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
-                                <i class="fa-solid fa-arrow-left mr-2"></i>Back
-                            </button>
-                            <button type="submit" id="submit-appointment-btn" 
-                                    class="bg-dark-orchid text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                    disabled>
-                                <i class="fa-solid fa-paper-plane mr-2"></i>Submit Request
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <script>
-        let selectedProvider = null;
-        
-        // Pass PHP schedules data to JavaScript
-        const doctorSchedules = <?php echo json_encode($schedules); ?>;
-        console.log('Doctor schedules loaded:', doctorSchedules);
-
-        // Provider Selection Modal Functions
-        function openProviderSelectionModal() {
-            const modal = document.getElementById('providerSelectionModal');
-            if (!modal) {
-                console.error('Provider selection modal not found!');
-                return;
-            }
-            modal.classList.remove('hidden');
-            document.body.style.overflow = 'hidden';
-            clearProviderFilters();
-        }
-
-        function closeProviderSelectionModal() {
-            document.getElementById('providerSelectionModal').classList.add('hidden');
-            document.body.style.overflow = 'auto';
-            resetProviderSelection();
-        }
-
-        function toggleProviderFilters() {
-            const filterSection = document.getElementById('provider-filter-section');
-            filterSection.classList.toggle('hidden');
-        }
-
-        function selectProviderForAppointment(providerID, providerName, providerRole) {
-            console.log('Selecting provider:', { providerID, providerName, providerRole });
-            
-            // Remove previous selections
-            document.querySelectorAll('.provider-card').forEach(card => {
-                card.classList.remove('bg-purple-50', 'border-purple-500');
-                card.classList.add('border-gray-200');
-                const indicator = card.querySelector('.provider-selection-indicator');
-                if (indicator) indicator.classList.add('hidden');
+        function showTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('[id$="-tab"]').forEach(tab => {
+                tab.classList.remove('border-dark-orchid', 'text-dark-orchid');
+                tab.classList.add('border-transparent', 'text-gray-500');
             });
             
-            // Find and highlight the selected card
-            const clickedCard = document.querySelector(`.provider-card[onclick*="${providerID}"]`);
-            if (clickedCard) {
-                clickedCard.classList.add('bg-purple-50', 'border-purple-500');
-                clickedCard.classList.remove('border-gray-200');
-                const indicator = clickedCard.querySelector('.provider-selection-indicator');
-                if (indicator) indicator.classList.remove('hidden');
+            document.getElementById(tabName + '-tab').classList.remove('border-transparent', 'text-gray-500');
+            document.getElementById(tabName + '-tab').classList.add('border-dark-orchid', 'text-dark-orchid');
+            
+            // Filter appointments
+            const appointments = document.querySelectorAll('.appointment-item');
+            appointments.forEach(appointment => {
+                const status = appointment.getAttribute('data-status');
                 
-                // Store selected provider
-                const specialty = clickedCard.dataset.specialty || clickedCard.querySelector('.text-gray-600')?.textContent || '';
-                const fee = clickedCard.dataset.fee || clickedCard.querySelector('.font-bold')?.textContent.replace(/[^\d]/g, '') || '0';
-                
-                selectedProvider = {
-                    id: providerID,
-                    name: providerName,
-                    role: providerRole,
-                    specialty: specialty,
-                    fee: fee
-                };
-                
-                console.log('Selected provider stored:', selectedProvider);
-            } else {
-                console.error('Provider card not found for ID:', providerID);
-            }
-            
-            // Update UI
-            const info = document.getElementById('selected-provider-info');
-            const details = document.getElementById('selected-provider-details');
-            if (info && details) {
-                details.innerHTML = `Selected: <strong>${providerName}</strong> (${providerRole})`;
-                info.classList.remove('hidden');
-            }
-            
-            const proceedBtn = document.getElementById('proceed-btn');
-            if (proceedBtn) {
-                proceedBtn.disabled = false;
-                console.log('Proceed button enabled');
-            } else {
-                console.error('Proceed button not found!');
-            }
-        }
-
-        function proceedToAppointmentBooking() {
-            console.log('Proceeding to appointment booking, selected provider:', selectedProvider);
-            
-            if (!selectedProvider) {
-                console.error('No provider selected!');
-                return;
-            }
-            
-            // Close provider selection modal
-            closeProviderSelectionModal();
-            
-            // Populate appointment booking modal
-            document.getElementById('booking-providerID').value = selectedProvider.id;
-            document.getElementById('booking-provider-name').textContent = selectedProvider.name;
-            document.getElementById('booking-provider-title').textContent = selectedProvider.name;
-            document.getElementById('booking-provider-specialty').textContent = selectedProvider.specialty;
-            document.getElementById('booking-provider-fee').textContent = parseFloat(selectedProvider.fee).toLocaleString('en-US', {minimumFractionDigits: 0});
-            
-            // Set provider icon
-            const iconContainer = document.getElementById('booking-provider-icon');
-            if (selectedProvider.role === 'Doctor') {
-                iconContainer.innerHTML = '<div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center"><i class="fa-solid fa-user-doctor text-blue-600"></i></div>';
-            } else {
-                iconContainer.innerHTML = '<div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center"><i class="fa-solid fa-utensils text-green-600"></i></div>';
-            }
-            
-            // Open appointment booking modal
-            const appointmentModal = document.getElementById('appointmentBookingModal');
-            if (appointmentModal) {
-                appointmentModal.classList.remove('hidden');
-                document.body.style.overflow = 'hidden';
-                
-                // Update available time slots when modal opens
-                updateAvailableTimeSlots();
-                
-                console.log('Appointment booking modal should now be visible');
-            } else {
-                console.error('Appointment booking modal not found!');
-            }
-        }
-
-        function backToProviderSelection() {
-            document.getElementById('appointmentBookingModal').classList.add('hidden');
-            document.getElementById('providerSelectionModal').classList.remove('hidden');
-        }
-
-        function closeAppointmentBookingModal() {
-            document.getElementById('appointmentBookingModal').classList.add('hidden');
-            document.body.style.overflow = 'auto';
-            
-            // Reset form
-            document.getElementById('appointmentForm').reset();
-            checkAppointmentFormValidity();
-        }
-
-        function resetProviderSelection() {
-            selectedProvider = null;
-            document.getElementById('selected-provider-info').classList.add('hidden');
-            document.getElementById('proceed-btn').disabled = true;
-            
-            document.querySelectorAll('.provider-card').forEach(card => {
-                card.classList.remove('bg-purple-50', 'border-purple-500');
-                card.classList.add('border-gray-200');
-                card.querySelector('.provider-selection-indicator').classList.add('hidden');
-            });
-        }
-
-        // Filter Functions
-        function applyProviderFilters() {
-            const typeFilter = document.getElementById('provider-type-filter').value;
-            const specialtyFilter = document.getElementById('specialty-filter').value;
-            const feeFilter = document.getElementById('fee-filter').value;
-            
-            const cards = document.querySelectorAll('.provider-card');
-            let visibleCount = 0;
-            
-            cards.forEach(card => {
-                let show = true;
-                
-                // Type filter
-                if (typeFilter && card.dataset.type !== typeFilter) {
-                    show = false;
-                }
-                
-                // Specialty filter
-                if (specialtyFilter && show && card.dataset.specialty !== specialtyFilter) {
-                    show = false;
-                }
-                
-                // Fee filter
-                if (feeFilter && show) {
-                    const fee = parseFloat(card.dataset.fee);
-                    const [min, max] = feeFilter.split('-').map(Number);
-                    if (max) {
-                        show = fee >= min && fee <= max;
-                    } else {
-                        show = fee >= min;
-                    }
-                }
-                
-                if (show) {
-                    card.style.display = 'block';
-                    visibleCount++;
+                if (tabName === 'upcoming' && (status === 'scheduled')) {
+                    appointment.style.display = 'block';
+                } else if (tabName === 'completed' && status === 'completed') {
+                    appointment.style.display = 'block';
+                } else if (tabName === 'canceled' && (status === 'canceled' || status === 'denied')) {
+                    appointment.style.display = 'block';
                 } else {
-                    card.style.display = 'none';
-                    // Reset selection if hidden card was selected
-                    if (card.classList.contains('bg-purple-50')) {
-                        resetProviderSelection();
-                    }
+                    appointment.style.display = 'none';
                 }
             });
             
-            // Show/hide no results message
-            const noResults = document.getElementById('no-providers-results');
-            if (visibleCount === 0) {
-                noResults.classList.remove('hidden');
-            } else {
-                noResults.classList.add('hidden');
-            }
-        }
-
-        function clearProviderFilters() {
-            document.getElementById('provider-type-filter').value = '';
-            document.getElementById('specialty-filter').value = '';
-            document.getElementById('fee-filter').value = '';
-            applyProviderFilters();
-        }
-
-        function checkAppointmentFormValidity() {
-            const dateInput = document.querySelector('input[name="appointmentDate"]');
-            const timeSelect = document.querySelector('select[name="appointmentTime"]');
-            const submitBtn = document.getElementById('submit-appointment-btn');
+            // Check if any appointments are visible
+            const visibleAppointments = Array.from(appointments).filter(app => app.style.display !== 'none');
+            const container = document.getElementById('appointments-container');
             
-            if (!dateInput || !timeSelect || !submitBtn) {
-                console.error('Form elements not found:', { dateInput: !!dateInput, timeSelect: !!timeSelect, submitBtn: !!submitBtn });
-                return;
-            }
-            
-            const dateSelected = dateInput.value !== '';
-            const timeSelected = timeSelect.value !== '';
-            
-            console.log('Form validity check:', { dateSelected, timeSelected });
-            
-            submitBtn.disabled = !(dateSelected && timeSelected);
-            
-            if (dateSelected && timeSelected) {
-                console.log('Form is valid, submit button enabled');
-            } else {
-                console.log('Form is invalid, submit button disabled');
-            }
-        }
-
-        function updateAvailableTimeSlots() {
-            const selectedDate = document.querySelector('input[name="appointmentDate"]').value;
-            const timeSelect = document.getElementById('appointmentTimeSelect');
-            const noSlotsMessage = document.getElementById('no-slots-message');
-            
-            if (!selectedDate || !selectedProvider) {
-                timeSelect.innerHTML = '<option value="">Please select a date</option>';
-                return;
-            }
-            
-            console.log('Updating time slots for:', { selectedDate, providerId: selectedProvider.id });
-            
-            // Clear previous options
-            timeSelect.innerHTML = '<option value="">Loading available times...</option>';
-            noSlotsMessage.classList.add('hidden');
-            
-            // If it's a nutritionist, show default time slots (they don't use schedule system)
-            if (selectedProvider.role === 'Nutritionist') {
-                const defaultTimeSlots = [
-                    '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-                    '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00'
-                ];
+            if (visibleAppointments.length === 0) {
+                let message = '';
+                switch(tabName) {
+                    case 'upcoming':
+                        message = 'No upcoming appointments';
+                        break;
+                    case 'completed':
+                        message = 'No completed appointments';
+                        break;
+                    case 'canceled':
+                        message = 'No canceled appointments';
+                        break;
+                }
                 
-                timeSelect.innerHTML = '<option value="">Select time</option>';
-                defaultTimeSlots.forEach(slot => {
-                    const option = document.createElement('option');
-                    option.value = slot;
-                    option.textContent = formatTime(slot);
-                    timeSelect.appendChild(option);
-                });
-                return;
-            }
-            
-            // For doctors, check their schedule
-            const providerId = selectedProvider.id;
-            const schedules = doctorSchedules[providerId] || [];
-            
-            console.log('Available schedules for provider:', schedules);
-            
-            // Find schedules for the selected date
-            const dateSchedules = schedules.filter(schedule => schedule.availableDate === selectedDate);
-            
-            if (dateSchedules.length === 0) {
-                timeSelect.innerHTML = '<option value="">No available slots</option>';
-                noSlotsMessage.classList.remove('hidden');
-                return;
-            }
-            
-            // Generate time slots based on doctor's schedule
-            timeSelect.innerHTML = '<option value="">Select time</option>';
-            let hasSlots = false;
-            
-            dateSchedules.forEach(schedule => {
-                const slots = generateTimeSlotsFromSchedule(schedule.startTime, schedule.endTime);
-                slots.forEach(slot => {
-                    const option = document.createElement('option');
-                    option.value = slot;
-                    option.textContent = formatTime(slot);
-                    timeSelect.appendChild(option);
-                    hasSlots = true;
-                });
-            });
-            
-            if (!hasSlots) {
-                timeSelect.innerHTML = '<option value="">No available slots</option>';
-                noSlotsMessage.classList.remove('hidden');
+                if (!document.querySelector('.no-appointments-message')) {
+                    const noAppointmentsDiv = document.createElement('div');
+                    noAppointmentsDiv.className = 'no-appointments-message text-center py-12';
+                    noAppointmentsDiv.innerHTML = `
+                        <i class="fa-solid fa-calendar-xmark fa-4x text-gray-400 mb-4"></i>
+                        <h3 class="text-xl font-semibold text-gray-600 mb-2">${message}</h3>
+                    `;
+                    container.appendChild(noAppointmentsDiv);
+                }
+            } else {
+                const noAppointmentsMessage = document.querySelector('.no-appointments-message');
+                if (noAppointmentsMessage) {
+                    noAppointmentsMessage.remove();
+                }
             }
         }
         
-        function generateTimeSlotsFromSchedule(startTime, endTime) {
-            const slots = [];
-            const start = new Date('2000-01-01 ' + startTime);
-            const end = new Date('2000-01-01 ' + endTime);
-            
-            while (start < end) {
-                const timeString = start.toTimeString().slice(0, 5);
-                slots.push(timeString);
-                start.setMinutes(start.getMinutes() + 30); // 30-minute intervals
-            }
-            
-            return slots;
-        }
-        
-        function formatTime(timeString) {
-            const time = new Date('2000-01-01 ' + timeString);
-            return time.toLocaleTimeString('en-US', { 
-                hour: 'numeric', 
-                minute: '2-digit',
-                hour12: true 
-            });
-        }
-
-        // Event Listeners
+        // Initialize with upcoming appointments
         document.addEventListener('DOMContentLoaded', function() {
-            // Auto-dismiss notifications after 2 seconds
-            const notifications = document.querySelectorAll('.alert-notification');
-            notifications.forEach(function(notification) {
-                setTimeout(function() {
-                    dismissAlert(notification.id);
-                }, 2000);
-            });
+            showTab('upcoming');
         });
-
-        // Notification Functions
-        function dismissAlert(alertId) {
-            const alert = document.getElementById(alertId);
-            if (alert) {
-                alert.style.transform = 'translateX(100%)';
-                alert.style.opacity = '0';
-                setTimeout(function() {
-                    alert.remove();
-                }, 300);
-            }
-        }
-
-        // Close modals when clicking outside
-        document.getElementById('providerSelectionModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeProviderSelectionModal();
-            }
-        });
-
-        document.getElementById('appointmentBookingModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeAppointmentBookingModal();
-            }
-        });
-
-        function confirmCancel(appointmentId, providerName, dateTime) {
-            const confirmMsg = `Are you sure you want to cancel your appointment with ${providerName} on ${dateTime}?\n\nThis action cannot be undone.`;
-            showCustomConfirm('Cancel Appointment', confirmMsg, () => {
-                // Create a form and submit it for cancellation
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.action = window.location.href;
-                
-                const actionInput = document.createElement('input');
-                actionInput.type = 'hidden';
-                actionInput.name = 'action';
-                actionInput.value = 'cancel';
-                
-                const appointmentInput = document.createElement('input');
-                appointmentInput.type = 'hidden';
-                appointmentInput.name = 'appointmentID';
-                appointmentInput.value = appointmentId;
-                
-                form.appendChild(actionInput);
-                form.appendChild(appointmentInput);
-                document.body.appendChild(form);
-                form.submit();
-            }, 'cancel');
-            return false; // Prevent default form submission
-        }
-
-        // Custom Modal Functions
-        let confirmCallback = null;
-        let currentModalType = 'warning'; // 'warning', 'success', 'danger'
-
-        function showCustomConfirm(title, message, callback, type = 'warning') {
-            currentModalType = type;
-            
-            const titleElement = document.getElementById('confirmTitle');
-            const messageElement = document.getElementById('confirmMessage');
-            const modalElement = document.getElementById('confirmationModal');
-            
-            if (!titleElement || !messageElement || !modalElement) {
-                console.error('Modal elements not found!');
-                // Fallback to browser confirm for safety
-                if (confirm(message)) {
-                    callback();
-                }
-                return;
-            }
-            
-            titleElement.textContent = title;
-            messageElement.textContent = message;
-            confirmCallback = callback;
-            
-            // Update modal styling based on type (different structure than caregiver modal)
-            const modalIcon = document.querySelector('#confirmationModal .modal-icon');
-            const modalIconContainer = modalIcon ? modalIcon.parentElement : null;
-            const confirmButton = document.getElementById('confirmButton');
-            
-            if (modalIconContainer && modalIcon && confirmButton) {
-                modalIconContainer.className = 'w-12 h-12 rounded-full flex items-center justify-center mr-4';
-                
-                switch(type) {
-                    case 'success':
-                    case 'booking':
-                        modalIconContainer.classList.add('bg-green-100');
-                        modalIcon.className = 'fas fa-check-circle text-green-600 text-xl modal-icon';
-                        confirmButton.className = 'px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition';
-                        break;
-                    case 'danger':
-                    case 'cancel':
-                        modalIconContainer.classList.add('bg-red-100');
-                        modalIcon.className = 'fas fa-exclamation-triangle text-red-600 text-xl modal-icon';
-                        confirmButton.className = 'px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition';
-                        break;
-                    default:
-                        modalIconContainer.classList.add('bg-yellow-100');
-                        modalIcon.className = 'fas fa-exclamation-triangle text-yellow-600 text-xl modal-icon';
-                        confirmButton.className = 'px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition';
-                }
-            }
-            
-            modalElement.classList.remove('hidden');
-            document.body.style.overflow = 'hidden';
-        }
-
-        function closeConfirmModal() {
-            const modalElement = document.getElementById('confirmationModal');
-            if (modalElement) {
-                modalElement.classList.add('hidden');
-                document.body.style.overflow = 'auto';
-            }
-            confirmCallback = null;
-            currentModalType = 'warning';
-        }
-
-        function confirmAction() {
-            if (confirmCallback && typeof confirmCallback === 'function') {
-                const callback = confirmCallback;
-                closeConfirmModal();
-                callback();
-            } else {
-                closeConfirmModal();
-            }
-        }
-
-        // Legacy function for backward compatibility
-        function openRequestModal() {
-            openProviderSelectionModal();
-        }
     </script>
-
-    <!-- Custom Confirmation Modal -->
-    <div id="confirmationModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
-        <div class="flex items-center justify-center min-h-screen p-4">
-            <div class="bg-white rounded-lg max-w-md w-full transform transition-all">
-                <div class="p-6">
-                    <!-- Modal Header -->
-                    <div class="flex items-center mb-4">
-                        <div class="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mr-4">
-                            <i class="fa-solid fa-exclamation-triangle text-yellow-600 text-xl modal-icon"></i>
-                        </div>
-                        <h3 class="text-lg font-semibold text-gray-900" id="confirmTitle">Confirm Action</h3>
-                    </div>
-                    
-                    <!-- Modal Body -->
-                    <div class="mb-6">
-                        <p class="text-gray-600" id="confirmMessage">Are you sure you want to proceed?</p>
-                    </div>
-                    
-                    <!-- Modal Footer -->
-                    <div class="flex justify-end space-x-3">
-                        <button onclick="closeConfirmModal()" 
-                                class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">
-                            Cancel
-                        </button>
-                        <button onclick="confirmAction()" id="confirmButton"
-                                class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">
-                            Confirm
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 </body>
 </html>

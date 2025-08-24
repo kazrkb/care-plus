@@ -254,27 +254,14 @@ function getStatusColor($status) {
                 </div>
             </header>
             
-            <!-- Modern Notifications -->
             <?php if ($successMsg): ?>
-                <div class="alert-notification fixed top-4 right-4 z-50 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg transform translate-x-0 transition-all duration-300 ease-in-out" id="success-alert">
-                    <div class="flex items-center">
-                        <i class="fa-solid fa-check-circle mr-2"></i>
-                        <span class="text-sm font-medium"><?php echo $successMsg; ?></span>
-                        <button onclick="dismissAlert('success-alert')" class="ml-4 text-green-200 hover:text-white">
-                            <i class="fa-solid fa-times"></i>
-                        </button>
-                    </div>
+                <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6" role="alert">
+                    <p><?php echo $successMsg; ?></p>
                 </div>
             <?php endif; ?>
             <?php if ($errorMsg): ?>
-                <div class="alert-notification fixed top-4 right-4 z-50 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg transform translate-x-0 transition-all duration-300 ease-in-out" id="error-alert">
-                    <div class="flex items-center">
-                        <i class="fa-solid fa-exclamation-circle mr-2"></i>
-                        <span class="text-sm font-medium"><?php echo $errorMsg; ?></span>
-                        <button onclick="dismissAlert('error-alert')" class="ml-4 text-red-200 hover:text-white">
-                            <i class="fa-solid fa-times"></i>
-                        </button>
-                    </div>
+                <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6" role="alert">
+                    <p><?php echo $errorMsg; ?></p>
                 </div>
             <?php endif; ?>
 
@@ -340,10 +327,11 @@ function getStatusColor($status) {
                                         </div>
                                         <div class="flex flex-col space-y-2">
                                             <?php if ($booking['status'] === 'Scheduled'): ?>
-                                                <button onclick="confirmCancelBooking(<?php echo $booking['bookingID']; ?>)" 
+                                                <a href="?cancel_booking_id=<?php echo $booking['bookingID']; ?>" 
+                                                   onclick="return confirm('Are you sure you want to cancel this booking?')" 
                                                    class="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition">
                                                     <i class="fa-solid fa-times mr-1"></i>Cancel
-                                                </button>
+                                                </a>
                                             <?php endif; ?>
                                         </div>
                                     </div>
@@ -749,168 +737,15 @@ function getStatusColor($status) {
             
             // Add confirmation on submit
             const form = document.getElementById(`booking-form-${caregiverID}`);
-            
-            // Clear any existing submit handlers
-            form.onsubmit = null;
-            
-            // Add new submit handler
             form.onsubmit = function(e) {
-                e.preventDefault();
-                const confirmMsg = `Confirm booking for ${bookingType} service starting ${bookingDate}?\n\nTotal cost: ৳${parseFloat(rate).toLocaleString('en-US', {minimumFractionDigits: 0})}`;
-                showCustomConfirm('Confirm Booking', confirmMsg, () => {
-                    // Use the original form reference for submission
-                    form.onsubmit = null; // Temporarily remove handler to allow submission
-                    form.submit();
-                }, 'booking');
-                return false;
+                return confirm(`Confirm booking for ${bookingType} service starting ${bookingDate}?\n\nTotal cost: ৳${parseFloat(rate).toLocaleString('en-US', {minimumFractionDigits: 0})}`);
             };
         }
 
         // Set default tab
         document.addEventListener('DOMContentLoaded', function() {
             showTab('my-bookings');
-            
-            // Auto-dismiss notifications after 2 seconds
-            const notifications = document.querySelectorAll('.alert-notification');
-            notifications.forEach(function(notification) {
-                setTimeout(function() {
-                    dismissAlert(notification.id);
-                }, 2000);
-            });
         });
-
-        // Notification Functions
-        function dismissAlert(alertId) {
-            const alert = document.getElementById(alertId);
-            if (alert) {
-                alert.style.transform = 'translateX(100%)';
-                alert.style.opacity = '0';
-                setTimeout(function() {
-                    alert.remove();
-                }, 300);
-            }
-        }
-
-        // Custom Modal Functions
-        let confirmCallback = null;
-        let currentModalType = 'warning'; // 'warning', 'success', 'danger'
-
-        function showCustomConfirm(title, message, callback, type = 'warning') {
-            currentModalType = type;
-            
-            const titleElement = document.getElementById('confirmTitle');
-            const messageElement = document.getElementById('confirmMessage');
-            const modalElement = document.getElementById('confirmationModal');
-            
-            if (!titleElement || !messageElement || !modalElement) {
-                console.error('Modal elements not found! Falling back to browser confirm.');
-                if (confirm(message)) {
-                    callback();
-                }
-                return;
-            }
-            
-            titleElement.textContent = title;
-            messageElement.textContent = message;
-            confirmCallback = callback;
-            
-            // Update modal styling based on type
-            const modalIcon = document.querySelector('#confirmationModal .modal-icon');
-            const modalIconContainer = modalIcon ? modalIcon.parentElement : null;
-            const confirmButton = document.getElementById('confirmButton');
-            
-            if (modalIconContainer && modalIcon && confirmButton) {
-                modalIconContainer.className = 'flex items-center justify-center w-12 h-12 mx-auto mb-4 rounded-full';
-                
-                switch(type) {
-                    case 'success':
-                    case 'booking':
-                        modalIconContainer.classList.add('bg-green-100');
-                        modalIcon.className = 'fas fa-check-circle text-green-600 text-xl modal-icon';
-                        confirmButton.className = 'px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition';
-                        break;
-                    case 'danger':
-                    case 'cancel':
-                        modalIconContainer.classList.add('bg-red-100');
-                        modalIcon.className = 'fas fa-exclamation-triangle text-red-600 text-xl modal-icon';
-                        confirmButton.className = 'px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition';
-                        break;
-                    default:
-                        modalIconContainer.classList.add('bg-yellow-100');
-                        modalIcon.className = 'fas fa-exclamation-triangle text-yellow-600 text-xl modal-icon';
-                        confirmButton.className = 'px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition';
-                }
-            }
-            
-            modalElement.classList.remove('hidden');
-            document.body.style.overflow = 'hidden';
-        }
-
-        function closeConfirmModal() {
-            const modalElement = document.getElementById('confirmationModal');
-            if (modalElement) {
-                modalElement.classList.add('hidden');
-                document.body.style.overflow = 'auto';
-            }
-            confirmCallback = null;
-            currentModalType = 'warning';
-        }
-
-        function confirmAction() {
-            if (confirmCallback && typeof confirmCallback === 'function') {
-                const callback = confirmCallback;
-                closeConfirmModal();
-                callback();
-            } else {
-                closeConfirmModal();
-            }
-        }
-
-        function confirmCancelBooking(bookingId) {
-            showCustomConfirm('Cancel Booking', 'Are you sure you want to cancel this booking? This action cannot be undone.', () => {
-                window.location.href = `?cancel_booking_id=${bookingId}`;
-            }, 'cancel');
-        }
     </script>
-
-    <!-- Custom Confirmation Modal -->
-    <div id="confirmationModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
-        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <!-- Modal Background -->
-            <div class="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75" onclick="closeConfirmModal()"></div>
-
-            <!-- Modal Content -->
-            <div class="inline-block px-6 pt-5 pb-4 overflow-hidden text-left align-bottom transition-all transform bg-white rounded-lg shadow-xl sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
-                
-                <!-- Modal Icon -->
-                <div class="flex items-center justify-center w-12 h-12 mx-auto mb-4 bg-yellow-100 rounded-full">
-                    <i class="fas fa-exclamation-triangle text-yellow-600 text-xl modal-icon"></i>
-                </div>
-                
-                <!-- Modal Header -->
-                <div class="text-center">
-                    <h3 id="confirmTitle" class="text-lg font-medium text-gray-900 mb-2">
-                        Confirm Action
-                    </h3>
-                    <p id="confirmMessage" class="text-sm text-gray-500 mb-6">
-                        Are you sure you want to proceed?
-                    </p>
-                </div>
-                
-                <!-- Modal Footer -->
-                <div class="flex justify-end space-x-3">
-                    <button onclick="closeConfirmModal()" 
-                            class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">
-                        Cancel
-                    </button>
-                    <button onclick="confirmAction()" id="confirmButton"
-                            class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">
-                        Confirm
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
 </body>
 </html>
