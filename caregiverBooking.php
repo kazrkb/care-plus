@@ -54,6 +54,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['book_availability_id'
             if ($bookingType == 'Weekly') { $endDate->modify('+7 days'); $totalAmount = $rates['weeklyRate']; }
             if ($bookingType == 'Monthly') { $endDate->modify('+1 month'); $totalAmount = $rates['monthlyRate']; }
 
+            // (NEW) Validation: Check if the PATIENT has a conflicting booking
+            $patientConflictCheck = $conn->prepare("SELECT bookingID FROM caregiverbooking WHERE patientID = ? AND status IN ('Scheduled', 'Active') AND (startDate < ? AND endDate > ?)");
+            $patientConflictCheck->bind_param("iss", $patientID, $endDate->format('Y-m-d'), $startDate);
+            $patientConflictCheck->execute();
+            if ($patientConflictCheck->get_result()->num_rows > 0) {
+                throw new Exception("You already have another caregiver booking scheduled during this time period.");
+            }
+            $patientConflictCheck->close();
+
             $sql = "INSERT INTO caregiverbooking (patientID, careGiverID, bookingType, startDate, endDate, totalAmount, status, availabilityID) VALUES (?, ?, ?, ?, ?, ?, 'Scheduled', ?)";
             $stmt = $conn->prepare($sql);
             $stmt->bind_param("iisssdi", $patientID, $careGiverID, $bookingType, $startDate, $endDate->format('Y-m-d'), $totalAmount, $availabilityID);
@@ -75,14 +84,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['book_availability_id'
     }
 }
 
-// --- Fetch data for the page display ---
+// --- Fetch ALL caregiver data ---
 $caregivers = $conn->query("SELECT u.userID, u.Name, u.profilePhoto, c.* FROM users u JOIN caregiver c ON u.userID = c.careGiverID WHERE u.role = 'CareGiver'")->fetch_all(MYSQLI_ASSOC);
 $availabilities = $conn->query("SELECT * FROM caregiver_availability WHERE status = 'Available' AND startDate >= CURDATE()")->fetch_all(MYSQLI_ASSOC);
 
 // --- Prepare data for filters ---
 $caregiverTypes = array_unique(array_column($caregivers, 'careGiverType'));
 
-// Group availabilities by caregiver for efficient filtering in JS
+// --- (CORRECTED) Group availabilities by caregiver BEFORE the loop to fix the error ---
 $availabilitiesByCareGiver = [];
 foreach ($availabilities as $avail) {
     $availabilitiesByCareGiver[$avail['careGiverID']][] = $avail;
@@ -193,19 +202,94 @@ $conn->close();
         </main>
     </div>
 
-     <div id="bookingModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4"></div>
-
+    <div id="bookingModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-lg">
+            <form method="POST" action="caregiverBooking.php">
+                <div class="p-6">
+                    <h3 class="text-xl font-bold text-slate-800 mb-2">Book <span id="modalCareGiverName"></span></h3>
+                    <p class="text-sm text-gray-500 mb-4">Select an available slot below to see the cost and confirm.</p>
+                    <input type="hidden" name="careGiverID" id="modalCareGiverID">
+                    <div id="slotsContainer" class="space-y-2 max-h-60 overflow-y-auto border p-3 rounded-md"></div>
+                    <div id="costDisplay" class="bg-gray-50 p-3 rounded-md text-sm mt-4 hidden">
+                        <p class="flex justify-between"><span>Service Period:</span> <strong id="periodDisplay">--</strong></p>
+                        <p class="flex justify-between mt-1"><span>Total Cost:</span> <strong id="totalAmountDisplay">--</strong></p>
+                    </div>
+                </div>
+                <div class="bg-gray-100 px-6 py-3 flex justify-end space-x-3">
+                    <button type="button" onclick="closeBookingModal()" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancel</button>
+                    <button type="submit" id="confirmBtn" class="px-4 py-2 bg-dark-orchid text-white rounded-md hover:bg-purple-700 disabled:opacity-50" disabled>Confirm Booking</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
     <script>
-        // --- Data from PHP for filtering ---
-        const caregiversData = <?php echo json_encode($caregivers); ?>;
-        const availabilitiesData = <?php echo json_encode($availabilitiesByCareGiver); ?>;
+        // --- (FULL JAVASCRIPT CODE) ---
+        const allAvailabilities = <?php echo json_encode($availabilitiesByCareGiver); ?>;
+        
+        const modal = document.getElementById('bookingModal');
+        const slotsContainer = document.getElementById('slotsContainer');
+        const confirmBtn = document.getElementById('confirmBtn');
+        const costDisplay = document.getElementById('costDisplay');
+        const periodDisplay = document.getElementById('periodDisplay');
+        const totalAmountDisplay = document.getElementById('totalAmountDisplay');
+        let currentCareGiver = null;
 
-        // --- Filter Elements ---
+        async function openBookingModal(careGiverData) {
+            currentCareGiver = careGiverData;
+            document.getElementById('modalCareGiverName').textContent = careGiverData.Name;
+            document.getElementById('modalCareGiverID').value = careGiverData.userID;
+            slotsContainer.innerHTML = '<p class="text-center text-gray-500">Loading availability...</p>';
+            modal.classList.remove('hidden');
+
+            const response = await fetch(`caregiverBooking.php?get_slots_for=${careGiverData.userID}`);
+            const slots = await response.json();
+
+            slotsContainer.innerHTML = '';
+            if (slots.length === 0) {
+                slotsContainer.innerHTML = '<p class="text-center text-red-500">This caregiver has no available slots.</p>';
+            } else {
+                slots.forEach(slot => {
+                    const date = new Date(slot.startDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+                    slotsContainer.innerHTML += `
+                        <label class="block p-3 border rounded-md hover:bg-purple-50 cursor-pointer">
+                            <input type="radio" name="book_availability_id" value="${slot.availabilityID}" class="mr-3" onchange="updateCost(this)"
+                                data-type="${slot.bookingType}" data-startdate="${slot.startDate}">
+                            <span class="font-semibold">Starts: ${date}</span>
+                            <span class="text-sm text-gray-600">(${slot.bookingType} Slot)</span>
+                        </label>
+                    `;
+                });
+            }
+        }
+        
+        function updateCost(radio) {
+            const bookingType = radio.dataset.type;
+            const startDate = new Date(radio.dataset.startdate);
+            let endDate = new Date(startDate);
+            let amount = 0;
+            
+            if(bookingType === 'Daily') { amount = parseFloat(currentCareGiver.dailyRate); endDate.setDate(endDate.getDate() + 1); }
+            if(bookingType === 'Weekly') { amount = parseFloat(currentCareGiver.weeklyRate); endDate.setDate(endDate.getDate() + 7); }
+            if(bookingType === 'Monthly') { amount = parseFloat(currentCareGiver.monthlyRate); endDate.setMonth(endDate.getMonth() + 1); }
+
+            periodDisplay.textContent = `${startDate.toLocaleDateString('en-CA')} to ${endDate.toLocaleDateString('en-CA')}`;
+            totalAmountDisplay.textContent = `৳${amount.toLocaleString()}`;
+            costDisplay.classList.remove('hidden');
+            confirmBtn.disabled = false;
+        }
+
+        function closeBookingModal() {
+            modal.classList.add('hidden');
+            confirmBtn.disabled = true;
+            costDisplay.classList.add('hidden');
+        }
+
+        // --- Filter Logic ---
         const filterType = document.getElementById('filterType');
         const filterBookingType = document.getElementById('filterBookingType');
         const filterDate = document.getElementById('filterDate');
         const resetBtn = document.getElementById('resetFilters');
-        const caregiverGrid = document.getElementById('caregiverGrid');
         const noResults = document.getElementById('noResults');
 
         function filterCaregivers() {
@@ -217,24 +301,16 @@ $conn->close();
             document.querySelectorAll('.caregiver-card').forEach(card => {
                 const caregiverId = card.dataset.caregiverId;
                 const caregiverType = card.dataset.caregiverType;
-                
                 let isVisible = true;
 
-                // Filter by Caregiver Type
-                if (type && caregiverType !== type) {
-                    isVisible = false;
-                }
-
-                // Filter by Booking Type
+                if (type && caregiverType !== type) isVisible = false;
                 if (isVisible && bookingType) {
-                    const hasBookingType = availabilitiesData[caregiverId]?.some(slot => slot.bookingType === bookingType);
+                    const hasBookingType = (allAvailabilities[caregiverId] || []).some(slot => slot.bookingType === bookingType);
                     if (!hasBookingType) isVisible = false;
                 }
-
-                // Filter by Date
                 if (isVisible && date) {
                     const selectedDate = new Date(date);
-                    const isAvailableOnDate = availabilitiesData[caregiverId]?.some(slot => {
+                    const isAvailableOnDate = (allAvailabilities[caregiverId] || []).some(slot => {
                         const startDate = new Date(slot.startDate);
                         let endDate = new Date(startDate);
                         if (slot.bookingType === 'Weekly') endDate.setDate(startDate.getDate() + 6);
@@ -250,7 +326,6 @@ $conn->close();
                 card.style.display = isVisible ? 'flex' : 'none';
                 if (isVisible) visibleCount++;
             });
-
             noResults.style.display = visibleCount === 0 ? 'block' : 'none';
         }
         
@@ -264,9 +339,6 @@ $conn->close();
             filterDate.value = '';
             filterCaregivers();
         });
-
-        // The Modal JavaScript remains unchanged from the previous version
-        // ... (modal open/close and cost calculation functions) ...
     </script>
 </body>
 </html>
