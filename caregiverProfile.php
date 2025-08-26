@@ -1,25 +1,64 @@
 <?php
+/**
+ * CAREGIVER PROFILE MANAGEMENT PAGE
+ * 
+ * This page allows caregivers to view and update their complete profile information
+ * including personal details and professional credentials.
+ * 
+ * Database Tables Used:
+ * - users: Basic user information (name, email, contact, profile photo)
+ * - caregiver: Professional caregiver details (type, certifications, rates, documents)
+ * 
+ * Features:
+ * - Personal information management
+ * - Professional details and specialization
+ * - Service rate configuration (daily, weekly, monthly)
+ * - Document upload (NID copy, certification documents)
+ * - Profile photo management
+ * - File validation and security
+ */
+
 session_start();
 
-// Protect this page: allow only logged-in Caregivers
+// === AUTHENTICATION & ACCESS CONTROL ===
+// Ensure only logged-in users with CareGiver role can access this page
 if (!isset($_SESSION['userID']) || $_SESSION['role'] !== 'CareGiver') {
     header("Location: login.php");
     exit();
 }
 
-// --- Database Connection ---
+// === DATABASE CONNECTION ===
+// Load database connection from config file
 $conn = require_once 'config.php';
 
-$caregiverID = $_SESSION['userID'];
-$userName = $_SESSION['Name'];
-$userAvatar = strtoupper(substr($userName, 0, 2));
+// === SESSION DATA EXTRACTION ===
+$caregiverID = $_SESSION['userID'];    // Current caregiver's unique ID
+$userName = $_SESSION['Name'];         // Current caregiver's name from session
+$userAvatar = strtoupper(substr($userName, 0, 2)); // Generate 2-letter avatar from name
 
-$successMsg = "";
-$errorMsg = "";
+// === FEEDBACK MESSAGE VARIABLES ===
+$successMsg = "";  // Stores success messages to display to user
+$errorMsg = "";    // Stores error messages to display to user
 
+/**
+ * FILE UPLOAD HANDLER FUNCTION
+ * 
+ * Handles secure file uploads for both profile photos and documents.
+ * Validates file types, sizes, and manages old file cleanup.
+ * 
+ * @param string $fileKey - Key name from $_FILES array (e.g., 'profilePhoto')
+ * @param string $columnName - Database column name to store file path
+ * @param int $caregiverID - ID of the caregiver uploading the file
+ * @param bool $isProfilePhoto - True for profile photos, false for documents
+ * @param mysqli $conn - Database connection object
+ * @return array - Returns ['path' => 'filepath'] on success or ['error' => 'message'] on failure
+ */
 // Helper function to handle all file uploads (profile photos and documents)
 function handleFileUpload($fileKey, $columnName, $caregiverID, $isProfilePhoto, $conn) {
+    // Check if a file was uploaded without errors
     if (isset($_FILES[$fileKey]) && $_FILES[$fileKey]['error'] == UPLOAD_ERR_OK) {
+        // === DIRECTORY SETUP ===
+        // Set different upload directories based on file type
         $uploadDir = $isProfilePhoto ? 'uploads/' : 'uploads/docs/';
         
         // Create directory if it doesn't exist
@@ -27,27 +66,36 @@ function handleFileUpload($fileKey, $columnName, $caregiverID, $isProfilePhoto, 
             mkdir($uploadDir, 0777, true);
         }
         
+        // === FILE TYPE VALIDATION ===
+        // Define allowed file types based on upload purpose
         $allowedTypes = $isProfilePhoto
             ? ['image/jpeg', 'image/png', 'image/webp'] // Stricter types for photos
             : ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']; // Allow PDF for docs
-        $maxFileSize = 5 * 1024 * 1024; // 5 MB
+        $maxFileSize = 5 * 1024 * 1024; // 5 MB maximum file size limit
 
+        // === GET FILE INFORMATION ===
         $file = $_FILES[$fileKey];
-        $fileType = mime_content_type($file['tmp_name']);
+        $fileType = mime_content_type($file['tmp_name']); // Get actual MIME type for security
 
+        // === VALIDATION CHECKS ===
+        // Check if file type is allowed
         if (!in_array($fileType, $allowedTypes)) {
             return ['error' => "Invalid file type for $fileKey. Allowed: " . implode(', ', $allowedTypes)];
         }
+        // Check if file size is within limit
         if ($file['size'] > $maxFileSize) {
             return ['error' => "File for $fileKey is too large. Maximum size is 5 MB."];
         }
 
+        // === GENERATE UNIQUE FILENAME ===
         $fileExtension = pathinfo($file['name'], PATHINFO_EXTENSION);
         $prefix = $isProfilePhoto ? 'profile' : strtolower($fileKey);
+        // Create unique filename: prefix_caregiverID_timestamp.extension
         $newFileName = $prefix . '_' . $caregiverID . '_' . time() . '.' . $fileExtension;
         $newFilePath = $uploadDir . $newFileName;
 
-        // Fetch old file path to delete it later
+        // === PREPARE FOR OLD FILE CLEANUP ===
+        // Get current file path from database to delete old file after successful upload
         $table = $isProfilePhoto ? 'users' : 'caregiver';
         $idColumn = $isProfilePhoto ? 'userID' : 'careGiverID';
         $oldFileQuery = "SELECT $columnName FROM $table WHERE $idColumn = ?";
@@ -56,47 +104,58 @@ function handleFileUpload($fileKey, $columnName, $caregiverID, $isProfilePhoto, 
         $oldStmt->execute();
         $oldFilePath = $oldStmt->get_result()->fetch_assoc()[$columnName] ?? null;
 
+        // === PERFORM FILE UPLOAD ===
         if (move_uploaded_file($file['tmp_name'], $newFilePath)) {
+            // Upload successful - clean up old file if it exists
             if ($oldFilePath && file_exists($oldFilePath)) {
-                unlink($oldFilePath);
+                unlink($oldFilePath); // Delete old file
             }
-            return ['path' => $newFilePath];
+            return ['path' => $newFilePath]; // Return new file path
         } else {
             return ['error' => "Failed to upload $fileKey."];
         }
     }
-    return ['path' => null];
+    return ['path' => null]; // No file was uploaded
 }
 
-// --- Handle Profile Update ---
+// === FORM SUBMISSION HANDLING ===
+// Process form data when user submits the profile update form
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    $updatePaths = [];
+    $updatePaths = []; // Array to store paths of successfully uploaded files
 
-    // Handle all file uploads first
+    // === FILE UPLOAD PROCESSING ===
+    // Define all possible file uploads with their database configurations
     $fileUploads = [
-        'profilePhoto'      => ['column' => 'profilePhoto', 'is_photo' => true],
-        'nidCopy'          => ['column' => 'nidCopyURL', 'is_photo' => false],
-        'certificationDoc' => ['column' => 'certificationURL', 'is_photo' => false]
+        'profilePhoto'      => ['column' => 'profilePhoto', 'is_photo' => true],      // User profile image
+        'nidCopy'          => ['column' => 'nidCopyURL', 'is_photo' => false],       // National ID document
+        'certificationDoc' => ['column' => 'certificationURL', 'is_photo' => false]  // Professional certificates
     ];
 
+    // Process each file upload and collect results
     foreach ($fileUploads as $fileKey => $details) {
         $result = handleFileUpload($fileKey, $details['column'], $caregiverID, $details['is_photo'], $conn);
+        // Stop processing if any upload fails
         if (isset($result['error'])) {
             $errorMsg = $result['error'];
             break; // Stop on first error
         }
+        // Store successful upload path for database update
         if ($result['path']) {
             $updatePaths[$details['column']] = $result['path'];
         }
     }
 
-    // --- Update Database (only if there were no upload errors) ---
+    // === DATABASE UPDATE PROCESSING ===
+    // Only proceed with database updates if there were no file upload errors
     if (empty($errorMsg)) {
-        $conn->begin_transaction();
+        $conn->begin_transaction(); // Start transaction for data consistency
         try {
-            // 1. Update the 'users' table
+            // === 1. UPDATE USERS TABLE ===
+            // Update personal information (name, contact, optionally profile photo)
             $updateUserSql = "UPDATE users SET Name = ?, contactNo = ? " . (isset($updatePaths['profilePhoto']) ? ", profilePhoto = ?" : "") . " WHERE userID = ?";
             $userStmt = $conn->prepare($updateUserSql);
+            // Bind parameters for users table update
+            // Parameters: Name, contactNo, [profilePhoto if uploaded], userID
             if (isset($updatePaths['profilePhoto'])) {
                 $userStmt->bind_param("sssi", $_POST['Name'], $_POST['contactNo'], $updatePaths['profilePhoto'], $caregiverID);
             } else {
@@ -104,7 +163,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             }
             $userStmt->execute();
 
-            // 2. Check if caregiver record exists, if not create one
+            // === 2. HANDLE CAREGIVER TABLE ===
+            // Check if caregiver record exists (since users can be patients/doctors/caregivers)
             $checkCaregiverSql = "SELECT careGiverID FROM caregiver WHERE careGiverID = ?";
             $checkStmt = $conn->prepare($checkCaregiverSql);
             $checkStmt->bind_param("i", $caregiverID);
@@ -112,7 +172,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $caregiverExists = $checkStmt->get_result()->num_rows > 0;
             
             if ($caregiverExists) {
-                // Update existing caregiver record
+                // === UPDATE EXISTING CAREGIVER RECORD ===
+                // Build dynamic SQL based on which documents were uploaded
                 $caregiverUpdateParts = [
                     "careGiverType = ?", "certifications = ?", "dailyRate = ?", "weeklyRate = ?",
                     "monthlyRate = ?", "nidNumber = ?"
@@ -121,46 +182,54 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     $_POST['careGiverType'], $_POST['certifications'], $_POST['dailyRate'], 
                     $_POST['weeklyRate'], $_POST['monthlyRate'], $_POST['nidNumber']
                 ];
-                $caregiverTypes = "ssddds";
+                $caregiverTypes = "ssddds"; // string, string, decimal, decimal, decimal, string
 
+                // Add document URLs to update if they were uploaded
                 foreach (['nidCopyURL', 'certificationURL'] as $docColumn) {
                     if (isset($updatePaths[$docColumn])) {
                         $caregiverUpdateParts[] = "$docColumn = ?";
                         $caregiverParams[] = $updatePaths[$docColumn];
-                        $caregiverTypes .= "s";
+                        $caregiverTypes .= "s"; // string for file path
                     }
                 }
+                // Execute UPDATE query
                 $updateCaregiverSql = "UPDATE caregiver SET " . implode(", ", $caregiverUpdateParts) . " WHERE careGiverID = ?";
                 $caregiverParams[] = $caregiverID;
-                $caregiverTypes .= "i";
+                $caregiverTypes .= "i"; // integer for careGiverID
                 $caregiverStmt = $conn->prepare($updateCaregiverSql);
                 $caregiverStmt->bind_param($caregiverTypes, ...$caregiverParams);
             } else {
-                // Insert new caregiver record
+                // === INSERT NEW CAREGIVER RECORD ===
+                // Create new caregiver record with all required fields
                 $insertCaregiverSql = "INSERT INTO caregiver (careGiverID, careGiverType, certifications, dailyRate, weeklyRate, monthlyRate, nidNumber, nidCopyURL, certificationURL) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-                $nidCopyPath = $updatePaths['nidCopyURL'] ?? null;
-                $certificationPath = $updatePaths['certificationURL'] ?? null;
+                $nidCopyPath = $updatePaths['nidCopyURL'] ?? null;       // Use uploaded path or null
+                $certificationPath = $updatePaths['certificationURL'] ?? null;  // Use uploaded path or null
                 $caregiverStmt = $conn->prepare($insertCaregiverSql);
+                // Bind parameters for INSERT: ID, type, certs, rates, nid, document paths
                 $caregiverStmt->bind_param("issdddss", $caregiverID, $_POST['careGiverType'], $_POST['certifications'], $_POST['dailyRate'], $_POST['weeklyRate'], $_POST['monthlyRate'], $_POST['nidNumber'], $nidCopyPath, $certificationPath);
             }
-            $caregiverStmt->execute();
+            $caregiverStmt->execute(); // Execute the prepared statement
             
-            $conn->commit();
-            $_SESSION['Name'] = $_POST['Name'];
-            $userName = $_SESSION['Name'];
+            // === TRANSACTION SUCCESS ===
+            $conn->commit(); // Commit all database changes
+            $_SESSION['Name'] = $_POST['Name']; // Update session with new name
+            $userName = $_SESSION['Name'];      // Refresh local variable
             $successMsg = "Profile updated successfully!";
         } catch (mysqli_sql_exception $exception) {
-            $conn->rollback();
+            // === TRANSACTION FAILURE ===
+            $conn->rollback(); // Undo all database changes
             $errorMsg = "Error updating profile: " . $exception->getMessage();
-            // If DB update fails, delete any newly uploaded files
+            // Clean up: Delete any newly uploaded files since database update failed
             foreach ($updatePaths as $path) {
-                if ($path && file_exists($path)) unlink($path);
+                if ($path && file_exists($path)) unlink($path); // Remove file from server
             }
         }
     }
 }
 
-// --- Fetch Caregiver's Current Profile Data ---
+// === FETCH CURRENT PROFILE DATA FOR DISPLAY ===
+// Get caregiver's information from both users and caregiver tables
+// LEFT JOIN ensures we get user data even if caregiver record doesn't exist yet
 $query = "SELECT u.Name, u.email, u.contactNo, u.profilePhoto, c.* FROM users u LEFT JOIN caregiver c ON u.userID = c.careGiverID WHERE u.userID = ?";
 $stmt = $conn->prepare($query);
 $stmt->bind_param("i", $caregiverID);
