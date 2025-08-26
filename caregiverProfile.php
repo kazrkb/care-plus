@@ -1,245 +1,253 @@
 <?php
+/**
+ * CAREGIVER PROFILE MANAGEMENT PAGE
+ * 
+ * This page allows caregivers to view and update their complete profile information
+ * including personal details and professional credentials.
+ * 
+ * Database Tables Used:
+ * - users: Basic user information (name, email, contact, profile photo)
+ * - caregiver: Professional caregiver details (type, certifications, rates, documents)
+ * 
+ * Features:
+ * - Personal information management
+ * - Professional details and specialization
+ * - Service rate configuration (daily, weekly, monthly)
+ * - Document upload (NID copy, certification documents)
+ * - Profile photo management
+ * - File validation and security
+ */
+
 session_start();
 
-// Protect this page: allow only logged-in CareGivers
+// === AUTHENTICATION & ACCESS CONTROL ===
+// Ensure only logged-in users with CareGiver role can access this page
 if (!isset($_SESSION['userID']) || $_SESSION['role'] !== 'CareGiver') {
     header("Location: login.php");
     exit();
 }
 
-// --- Database Connection ---
+// === DATABASE CONNECTION ===
+// Load database connection from config file
 $conn = require_once 'config.php';
 
-$userName = $_SESSION['Name'];
-$userID = $_SESSION['userID'];
-$userAvatar = strtoupper(substr($userName, 0, 2));
+// === SESSION DATA EXTRACTION ===
+$caregiverID = $_SESSION['userID'];    // Current caregiver's unique ID
+$userName = $_SESSION['Name'];         // Current caregiver's name from session
+$userAvatar = strtoupper(substr($userName, 0, 2)); // Generate 2-letter avatar from name
 
-$successMsg = "";
-$errorMsg = "";
+// === FEEDBACK MESSAGE VARIABLES ===
+$successMsg = "";  // Stores success messages to display to user
+$errorMsg = "";    // Stores error messages to display to user
 
-// Helper function to handle file uploads securely
-function handleFileUpload($fileInputName, $uploadSubDir) {
-    if (isset($_FILES[$fileInputName]) && $_FILES[$fileInputName]["error"] === UPLOAD_ERR_OK) {
-        $uploadDir = "uploads/" . $uploadSubDir . "/";
+/**
+ * FILE UPLOAD HANDLER FUNCTION
+ * 
+ * Handles secure file uploads for both profile photos and documents.
+ * Validates file types, sizes, and manages old file cleanup.
+ * 
+ * @param string $fileKey - Key name from $_FILES array (e.g., 'profilePhoto')
+ * @param string $columnName - Database column name to store file path
+ * @param int $caregiverID - ID of the caregiver uploading the file
+ * @param bool $isProfilePhoto - True for profile photos, false for documents
+ * @param mysqli $conn - Database connection object
+ * @return array - Returns ['path' => 'filepath'] on success or ['error' => 'message'] on failure
+ */
+// Helper function to handle all file uploads (profile photos and documents)
+function handleFileUpload($fileKey, $columnName, $caregiverID, $isProfilePhoto, $conn) {
+    // Check if a file was uploaded without errors
+    if (isset($_FILES[$fileKey]) && $_FILES[$fileKey]['error'] == UPLOAD_ERR_OK) {
+        // === DIRECTORY SETUP ===
+        // Set different upload directories based on file type
+        $uploadDir = $isProfilePhoto ? 'uploads/' : 'uploads/docs/';
+        
+        // Create directory if it doesn't exist
         if (!is_dir($uploadDir)) {
             mkdir($uploadDir, 0777, true);
         }
         
-        $allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
-        $maxSize = 5 * 1024 * 1024; // 5MB
-        
-        $fileType = $_FILES[$fileInputName]['type'];
-        $fileSize = $_FILES[$fileInputName]['size'];
-        $fileName = $_FILES[$fileInputName]['name'];
-        
-        // Validate file type
+        // === FILE TYPE VALIDATION ===
+        // Define allowed file types based on upload purpose
+        $allowedTypes = $isProfilePhoto
+            ? ['image/jpeg', 'image/png', 'image/webp'] // Stricter types for photos
+            : ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']; // Allow PDF for docs
+        $maxFileSize = 5 * 1024 * 1024; // 5 MB maximum file size limit
+
+        // === GET FILE INFORMATION ===
+        $file = $_FILES[$fileKey];
+        $fileType = mime_content_type($file['tmp_name']); // Get actual MIME type for security
+
+        // === VALIDATION CHECKS ===
+        // Check if file type is allowed
         if (!in_array($fileType, $allowedTypes)) {
-            return ['error' => 'Only JPG, PNG, WebP, GIF, and PDF files are allowed.'];
+            return ['error' => "Invalid file type for $fileKey. Allowed: " . implode(', ', $allowedTypes)];
         }
-        
-        // Validate file size
-        if ($fileSize > $maxSize) {
-            return ['error' => 'File size must be less than 5MB.'];
+        // Check if file size is within limit
+        if ($file['size'] > $maxFileSize) {
+            return ['error' => "File for $fileKey is too large. Maximum size is 5 MB."];
         }
-        
-        $filename = time() . "_" . preg_replace("/[^a-zA-Z0-9.]/", "_", basename($fileName));
-        $uploadPath = $uploadDir . $filename;
 
-        if (move_uploaded_file($_FILES[$fileInputName]["tmp_name"], $uploadPath)) {
-            return ['success' => $uploadPath];
+        // === GENERATE UNIQUE FILENAME ===
+        $fileExtension = pathinfo($file['name'], PATHINFO_EXTENSION);
+        $prefix = $isProfilePhoto ? 'profile' : strtolower($fileKey);
+        // Create unique filename: prefix_caregiverID_timestamp.extension
+        $newFileName = $prefix . '_' . $caregiverID . '_' . time() . '.' . $fileExtension;
+        $newFilePath = $uploadDir . $newFileName;
+
+        // === PREPARE FOR OLD FILE CLEANUP ===
+        // Get current file path from database to delete old file after successful upload
+        $table = $isProfilePhoto ? 'users' : 'caregiver';
+        $idColumn = $isProfilePhoto ? 'userID' : 'careGiverID';
+        $oldFileQuery = "SELECT $columnName FROM $table WHERE $idColumn = ?";
+        $oldStmt = $conn->prepare($oldFileQuery);
+        $oldStmt->bind_param("i", $caregiverID);
+        $oldStmt->execute();
+        $oldFilePath = $oldStmt->get_result()->fetch_assoc()[$columnName] ?? null;
+
+        // === PERFORM FILE UPLOAD ===
+        if (move_uploaded_file($file['tmp_name'], $newFilePath)) {
+            // Upload successful - clean up old file if it exists
+            if ($oldFilePath && file_exists($oldFilePath)) {
+                unlink($oldFilePath); // Delete old file
+            }
+            return ['path' => $newFilePath]; // Return new file path
         } else {
-            return ['error' => 'Failed to upload file.'];
+            return ['error' => "Failed to upload $fileKey."];
         }
     }
-    return null;
+    return ['path' => null]; // No file was uploaded
 }
 
-// Handle form submission for profile update
+// === FORM SUBMISSION HANDLING ===
+// Process form data when user submits the profile update form
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    $updateType = $_POST['update_type'] ?? 'personal';
-    
-    if ($updateType === 'personal') {
-        // Handle personal information update
-        $name = trim($_POST['name']);
-        $email = trim($_POST['email']);
-        $contactNo = trim($_POST['contactNo']);
-        $photoPath = null;
-        $photoUploadError = null;
-        
-        // Handle photo removal
-        $removePhoto = isset($_POST['removePhoto']) && $_POST['removePhoto'] === '1';
-        
-        // Handle photo upload
-        if (isset($_FILES['profilePhoto']) && $_FILES['profilePhoto']['error'] === UPLOAD_ERR_OK) {
-            $uploadDir = 'uploads/';
-            $allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-            $maxSize = 5 * 1024 * 1024; // 5MB
+    $updatePaths = []; // Array to store paths of successfully uploaded files
+
+    // === FILE UPLOAD PROCESSING ===
+    // Define all possible file uploads with their database configurations
+    $fileUploads = [
+        'profilePhoto'      => ['column' => 'profilePhoto', 'is_photo' => true],      // User profile image
+        'nidCopy'          => ['column' => 'nidCopyURL', 'is_photo' => false],       // National ID document
+        'certificationDoc' => ['column' => 'certificationURL', 'is_photo' => false]  // Professional certificates
+    ];
+
+    // Process each file upload and collect results
+    foreach ($fileUploads as $fileKey => $details) {
+        $result = handleFileUpload($fileKey, $details['column'], $caregiverID, $details['is_photo'], $conn);
+        // Stop processing if any upload fails
+        if (isset($result['error'])) {
+            $errorMsg = $result['error'];
+            break; // Stop on first error
+        }
+        // Store successful upload path for database update
+        if ($result['path']) {
+            $updatePaths[$details['column']] = $result['path'];
+        }
+    }
+
+    // === DATABASE UPDATE PROCESSING ===
+    // Only proceed with database updates if there were no file upload errors
+    if (empty($errorMsg)) {
+        $conn->begin_transaction(); // Start transaction for data consistency
+        try {
+            // === 1. UPDATE USERS TABLE ===
+            // Update personal information (name, contact, optionally profile photo)
+            $updateUserSql = "UPDATE users SET Name = ?, contactNo = ? " . (isset($updatePaths['profilePhoto']) ? ", profilePhoto = ?" : "") . " WHERE userID = ?";
+            $userStmt = $conn->prepare($updateUserSql);
+            // Bind parameters for users table update
+            // Parameters: Name, contactNo, [profilePhoto if uploaded], userID
+            if (isset($updatePaths['profilePhoto'])) {
+                $userStmt->bind_param("sssi", $_POST['Name'], $_POST['contactNo'], $updatePaths['profilePhoto'], $caregiverID);
+            } else {
+                $userStmt->bind_param("ssi", $_POST['Name'], $_POST['contactNo'], $caregiverID);
+            }
+            $userStmt->execute();
+
+            // === 2. HANDLE CAREGIVER TABLE ===
+            // Check if caregiver record exists (since users can be patients/doctors/caregivers)
+            $checkCaregiverSql = "SELECT careGiverID FROM caregiver WHERE careGiverID = ?";
+            $checkStmt = $conn->prepare($checkCaregiverSql);
+            $checkStmt->bind_param("i", $caregiverID);
+            $checkStmt->execute();
+            $caregiverExists = $checkStmt->get_result()->num_rows > 0;
             
-            $fileType = $_FILES['profilePhoto']['type'];
-            $fileSize = $_FILES['profilePhoto']['size'];
-            $fileName = $_FILES['profilePhoto']['name'];
-            $fileExt = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+            if ($caregiverExists) {
+                // === UPDATE EXISTING CAREGIVER RECORD ===
+                // Build dynamic SQL based on which documents were uploaded
+                $caregiverUpdateParts = [
+                    "careGiverType = ?", "certifications = ?", "dailyRate = ?", "weeklyRate = ?",
+                    "monthlyRate = ?", "nidNumber = ?"
+                ];
+                $caregiverParams = [
+                    $_POST['careGiverType'], $_POST['certifications'], $_POST['dailyRate'], 
+                    $_POST['weeklyRate'], $_POST['monthlyRate'], $_POST['nidNumber']
+                ];
+                $caregiverTypes = "ssddds"; // string, string, decimal, decimal, decimal, string
+
+                // Add document URLs to update if they were uploaded
+                foreach (['nidCopyURL', 'certificationURL'] as $docColumn) {
+                    if (isset($updatePaths[$docColumn])) {
+                        $caregiverUpdateParts[] = "$docColumn = ?";
+                        $caregiverParams[] = $updatePaths[$docColumn];
+                        $caregiverTypes .= "s"; // string for file path
+                    }
+                }
+                // Execute UPDATE query
+                $updateCaregiverSql = "UPDATE caregiver SET " . implode(", ", $caregiverUpdateParts) . " WHERE careGiverID = ?";
+                $caregiverParams[] = $caregiverID;
+                $caregiverTypes .= "i"; // integer for careGiverID
+                $caregiverStmt = $conn->prepare($updateCaregiverSql);
+                $caregiverStmt->bind_param($caregiverTypes, ...$caregiverParams);
+            } else {
+                // === INSERT NEW CAREGIVER RECORD ===
+                // Create new caregiver record with all required fields
+                $insertCaregiverSql = "INSERT INTO caregiver (careGiverID, careGiverType, certifications, dailyRate, weeklyRate, monthlyRate, nidNumber, nidCopyURL, certificationURL) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                $nidCopyPath = $updatePaths['nidCopyURL'] ?? null;       // Use uploaded path or null
+                $certificationPath = $updatePaths['certificationURL'] ?? null;  // Use uploaded path or null
+                $caregiverStmt = $conn->prepare($insertCaregiverSql);
+                // Bind parameters for INSERT: ID, type, certs, rates, nid, document paths
+                $caregiverStmt->bind_param("issdddss", $caregiverID, $_POST['careGiverType'], $_POST['certifications'], $_POST['dailyRate'], $_POST['weeklyRate'], $_POST['monthlyRate'], $_POST['nidNumber'], $nidCopyPath, $certificationPath);
+            }
+            $caregiverStmt->execute(); // Execute the prepared statement
             
-            // Validate file type
-            if (!in_array($fileType, $allowedTypes)) {
-                $photoUploadError = "Only JPG, PNG, WebP, and GIF files are allowed.";
+            // === TRANSACTION SUCCESS ===
+            $conn->commit(); // Commit all database changes
+            $_SESSION['Name'] = $_POST['Name']; // Update session with new name
+            $userName = $_SESSION['Name'];      // Refresh local variable
+            $successMsg = "Profile updated successfully!";
+        } catch (mysqli_sql_exception $exception) {
+            // === TRANSACTION FAILURE ===
+            $conn->rollback(); // Undo all database changes
+            $errorMsg = "Error updating profile: " . $exception->getMessage();
+            // Clean up: Delete any newly uploaded files since database update failed
+            foreach ($updatePaths as $path) {
+                if ($path && file_exists($path)) unlink($path); // Remove file from server
             }
-            // Validate file size
-            elseif ($fileSize > $maxSize) {
-                $photoUploadError = "File size must be less than 5MB.";
-            }
-            else {
-                // Generate unique filename
-                $uniqueName = "profile_" . $userID . "_" . time() . "." . $fileExt;
-                $photoPath = $uploadDir . $uniqueName;
-                
-                if (!move_uploaded_file($_FILES['profilePhoto']['tmp_name'], $photoPath)) {
-                    $photoUploadError = "Failed to upload photo.";
-                    $photoPath = null;
-                }
-            }
-        }
-        
-        if (empty($photoUploadError)) {
-            try {
-                $conn->begin_transaction();
-                
-                // Update users table
-                if ($removePhoto) {
-                    $sql = "UPDATE users SET Name=?, email=?, contactNo=?, profilePhoto=NULL WHERE userID=?";
-                    $stmt = $conn->prepare($sql);
-                    $stmt->bind_param("sssi", $name, $email, $contactNo, $userID);
-                } elseif ($photoPath) {
-                    $sql = "UPDATE users SET Name=?, email=?, contactNo=?, profilePhoto=? WHERE userID=?";
-                    $stmt = $conn->prepare($sql);
-                    $stmt->bind_param("ssssi", $name, $email, $contactNo, $photoPath, $userID);
-                } else {
-                    $sql = "UPDATE users SET Name=?, email=?, contactNo=? WHERE userID=?";
-                    $stmt = $conn->prepare($sql);
-                    $stmt->bind_param("sssi", $name, $email, $contactNo, $userID);
-                }
-                
-                if ($stmt->execute()) {
-                    $_SESSION['Name'] = $name;
-                    $conn->commit();
-                    $successMsg = "Personal information updated successfully!";
-                } else {
-                    throw new Exception("Failed to update personal information.");
-                }
-                
-            } catch (Exception $e) {
-                $conn->rollback();
-                $errorMsg = "Error: " . $e->getMessage();
-            }
-        } else {
-            $errorMsg = $photoUploadError;
-        }
-        
-    } elseif ($updateType === 'professional') {
-        // Handle professional information update
-        $careGiverType = trim($_POST['careGiverType']);
-        $certifications = trim($_POST['certifications']);
-        $dailyRate = floatval($_POST['dailyRate']);
-        $weeklyRate = floatval($_POST['weeklyRate']);
-        $monthlyRate = floatval($_POST['monthlyRate']);
-        $nidNumber = trim($_POST['nidNumber']);
-        
-        $nidCopyResult = handleFileUpload('nidCopyURL', 'caregiver_documents');
-        $certificationResult = handleFileUpload('certificationURL', 'caregiver_documents');
-        
-        // Check for upload errors
-        $uploadError = null;
-        if ($nidCopyResult && isset($nidCopyResult['error'])) {
-            $uploadError = "NID Copy: " . $nidCopyResult['error'];
-        }
-        if ($certificationResult && isset($certificationResult['error'])) {
-            $uploadError = ($uploadError ? $uploadError . " | " : "") . "Certification: " . $certificationResult['error'];
-        }
-        
-        if (!$uploadError) {
-            try {
-                $conn->begin_transaction();
-                
-                // Check if caregiver record exists
-                $checkSql = "SELECT careGiverID FROM caregiver WHERE careGiverID = ?";
-                $checkStmt = $conn->prepare($checkSql);
-                $checkStmt->bind_param("i", $userID);
-                $checkStmt->execute();
-                $result = $checkStmt->get_result();
-                
-                if ($result->num_rows > 0) {
-                    // Update existing record
-                    $updateSql = "UPDATE caregiver SET careGiverType=?, certifications=?, dailyRate=?, weeklyRate=?, monthlyRate=?, nidNumber=?";
-                    $params = [$careGiverType, $certifications, $dailyRate, $weeklyRate, $monthlyRate, $nidNumber];
-                    $types = "ssddds";
-                    
-                    if ($nidCopyResult && isset($nidCopyResult['success'])) {
-                        $updateSql .= ", nidCopyURL=?";
-                        $params[] = $nidCopyResult['success'];
-                        $types .= "s";
-                    }
-                    
-                    if ($certificationResult && isset($certificationResult['success'])) {
-                        $updateSql .= ", certificationURL=?";
-                        $params[] = $certificationResult['success'];
-                        $types .= "s";
-                    }
-                    
-                    $updateSql .= " WHERE careGiverID=?";
-                    $params[] = $userID;
-                    $types .= "i";
-                    
-                    $stmt = $conn->prepare($updateSql);
-                    $stmt->bind_param($types, ...$params);
-                } else {
-                    // Insert new record
-                    $insertSql = "INSERT INTO caregiver (careGiverID, careGiverType, certifications, dailyRate, weeklyRate, monthlyRate, nidNumber, nidCopyURL, certificationURL) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-                    $nidCopyPath = $nidCopyResult ? $nidCopyResult['success'] : null;
-                    $certificationPath = $certificationResult ? $certificationResult['success'] : null;
-                    
-                    $stmt = $conn->prepare($insertSql);
-                    $stmt->bind_param("issdddss", $userID, $careGiverType, $certifications, $dailyRate, $weeklyRate, $monthlyRate, $nidNumber, $nidCopyPath, $certificationPath);
-                }
-                
-                if ($stmt->execute()) {
-                    $conn->commit();
-                    $successMsg = "Professional information updated successfully!";
-                } else {
-                    throw new Exception("Failed to update professional information.");
-                }
-                
-            } catch (Exception $e) {
-                $conn->rollback();
-                $errorMsg = "Error: " . $e->getMessage();
-            }
-        } else {
-            $errorMsg = $uploadError;
         }
     }
 }
 
-// Fetch current user data
-$sql = "SELECT u.*, c.careGiverType, c.certifications, c.dailyRate, c.weeklyRate, c.monthlyRate, c.nidNumber, c.nidCopyURL, c.certificationURL 
-        FROM users u 
-        LEFT JOIN caregiver c ON u.userID = c.careGiverID 
-        WHERE u.userID = ?";
-$stmt = $conn->prepare($sql);
-$stmt->bind_param("i", $userID);
+// === FETCH CURRENT PROFILE DATA FOR DISPLAY ===
+// Get caregiver's information from both users and caregiver tables
+// LEFT JOIN ensures we get user data even if caregiver record doesn't exist yet
+$query = "SELECT u.Name, u.email, u.contactNo, u.profilePhoto, c.* FROM users u LEFT JOIN caregiver c ON u.userID = c.careGiverID WHERE u.userID = ?";
+$stmt = $conn->prepare($query);
+$stmt->bind_param("i", $caregiverID);
 $stmt->execute();
 $result = $stmt->get_result();
-$userData = $result->fetch_assoc();
-
-if (!$userData) {
-    $errorMsg = "User data not found.";
+$caregiverData = $result->fetch_assoc();
+if (!$caregiverData) {
+    die("Error: Could not retrieve caregiver profile data.");
 }
+$stmt->close();
+$conn->close();
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Caregiver Profile - CarePlus</title>
+    <title>My Profile - CarePlus</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
@@ -247,277 +255,165 @@ if (!$userData) {
         body { font-family: 'Inter', sans-serif; }
         .bg-dark-orchid { background-color: #9932CC; }
         .text-dark-orchid { color: #9932CC; }
-        .border-dark-orchid { border-color: #9932CC; }
-        .hover\:bg-dark-orchid:hover { background-color: #9932CC; }
-        .focus\:border-dark-orchid:focus { border-color: #9932CC; }
-        .focus\:ring-dark-orchid:focus { ring-color: #9932CC; }
+        .shadow-orchid-custom { box-shadow: 0 4px 6px -1px rgba(153, 50, 204, 0.1), 0 2px 4px -2px rgba(153, 50, 204, 0.1); }
+        .form-input { margin-top: 0.25rem; display: block; width: 100%; padding: 0.5rem; border-width: 1px; border-color: #D1D5DB; border-radius: 0.375rem; box-shadow: sm; }
+        .form-input:focus { ring-color: #9932CC; border-color: #9932CC; }
     </style>
 </head>
-<body class="bg-gray-50">
-    <!-- Header -->
-    <header class="bg-white shadow-sm border-b">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center h-16">
-                <div class="flex items-center">
-                    <h1 class="text-2xl font-bold text-dark-orchid">CarePlus</h1>
-                    <span class="ml-2 text-gray-600">Caregiver Profile</span>
+<body class="bg-purple-50">
+    <div class="flex min-h-screen">
+        <aside class="w-64 bg-white border-r">
+            <div class="p-6">
+                <a href="#" class="text-2xl font-bold text-dark-orchid">CarePlus</a>
+            </div>
+            <nav class="px-4">
+                <a href="careGiverDashboard.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-table-columns w-5"></i><span>Dashboard</span></a>
+                <a href="caregiverProfile.php" class="flex items-center space-x-3 px-4 py-3 bg-purple-100 text-dark-orchid rounded-lg"><i class="fa-regular fa-user w-5"></i><span>My Profile</span></a>
+                <a href="caregiver_availability.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-calendar-days w-5"></i><span>Availability</span></a>
+                <a href="my_bookings.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-calendar-check w-5"></i><span>My Bookings</span></a>
+                <a href="#" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-heart-pulse w-5"></i><span>Patient Care</span></a>
+                <a href="logout.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg mt-8"><i class="fa-solid fa-arrow-right-from-bracket w-5"></i><span>Logout</span></a>
+            </nav>
+        </aside>
+
+        <main class="flex-1 p-8">
+            <header class="flex justify-between items-center mb-8">
+                <div>
+                    <h1 class="text-3xl font-bold text-slate-800">My Profile</h1>
+                    <p class="text-gray-600 mt-1">Update your personal and professional information</p>
                 </div>
                 <div class="flex items-center space-x-4">
-                    <span class="text-gray-700">Welcome, <?php echo htmlspecialchars($userName); ?></span>
-                    <a href="careGiverDashboard.php" class="bg-dark-orchid text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition">
-                        <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
-                    </a>
-                    <a href="logout.php" class="text-gray-600 hover:text-gray-800">
-                        <i class="fas fa-sign-out-alt"></i>
-                    </a>
-                </div>
-            </div>
-        </div>
-    </header>
-
-    <!-- Main Content -->
-    <main class="max-w-4xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-        <!-- Success/Error Messages -->
-        <?php if ($successMsg): ?>
-            <div class="mb-6 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative">
-                <i class="fas fa-check-circle mr-2"></i>
-                <?php echo htmlspecialchars($successMsg); ?>
-            </div>
-        <?php endif; ?>
-
-        <?php if ($errorMsg): ?>
-            <div class="mb-6 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
-                <i class="fas fa-exclamation-circle mr-2"></i>
-                <?php echo htmlspecialchars($errorMsg); ?>
-            </div>
-        <?php endif; ?>
-
-        <!-- Profile Header -->
-        <div class="bg-white rounded-lg shadow-sm mb-6 p-6">
-            <div class="flex items-center space-x-4">
-                <div class="flex-shrink-0">
-                    <?php if ($userData['profilePhoto']): ?>
-                        <img class="h-20 w-20 rounded-full object-cover" src="<?php echo htmlspecialchars($userData['profilePhoto']); ?>" alt="Profile">
+                    <div class="text-right">
+                        <p class="font-semibold text-slate-700"><?php echo htmlspecialchars($userName); ?></p>
+                        <p class="text-sm text-gray-500">CareGiver</p>
+                    </div>
+                    <?php if (!empty($caregiverData['profilePhoto']) && file_exists($caregiverData['profilePhoto'])): ?>
+                        <img src="<?php echo htmlspecialchars($caregiverData['profilePhoto']); ?>" alt="Profile Photo" class="w-12 h-12 rounded-full object-cover">
                     <?php else: ?>
-                        <div class="h-20 w-20 rounded-full bg-dark-orchid text-white flex items-center justify-center text-2xl font-bold">
-                            <?php echo $userAvatar; ?>
-                        </div>
+                        <div class="w-12 h-12 rounded-full bg-dark-orchid text-white flex items-center justify-center font-bold text-lg"><?php echo htmlspecialchars($userAvatar); ?></div>
                     <?php endif; ?>
                 </div>
-                <div>
-                    <h1 class="text-2xl font-bold text-gray-900"><?php echo htmlspecialchars($userData['Name']); ?></h1>
-                    <p class="text-gray-600"><?php echo htmlspecialchars($userData['careGiverType'] ?? 'Caregiver'); ?></p>
-                    <p class="text-sm text-gray-500">
-                        <i class="fas fa-envelope mr-1"></i>
-                        <?php echo htmlspecialchars($userData['email']); ?>
-                    </p>
-                    <?php if ($userData['contactNo']): ?>
-                        <p class="text-sm text-gray-500">
-                            <i class="fas fa-phone mr-1"></i>
-                            <?php echo htmlspecialchars($userData['contactNo']); ?>
-                        </p>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
+            </header>
 
-        <!-- Tab Navigation -->
-        <div class="bg-white rounded-lg shadow-sm mb-6">
-            <div class="border-b border-gray-200">
-                <nav class="-mb-px flex">
-                    <button onclick="showTab('personal')" id="personal-tab" class="tab-button py-4 px-6 border-b-2 border-dark-orchid text-dark-orchid font-medium">
-                        <i class="fas fa-user mr-2"></i>Personal Information
-                    </button>
-                    <button onclick="showTab('professional')" id="professional-tab" class="tab-button py-4 px-6 border-b-2 border-transparent text-gray-500 hover:text-gray-700">
-                        <i class="fas fa-briefcase mr-2"></i>Professional Information
-                    </button>
-                </nav>
-            </div>
+            <?php if ($successMsg): ?>
+            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6" role="alert"><i class="fa-solid fa-check-circle mr-2"></i><?php echo $successMsg; ?></div>
+            <?php endif; ?>
+            <?php if ($errorMsg): ?>
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6" role="alert"><i class="fa-solid fa-exclamation-circle mr-2"></i><?php echo $errorMsg; ?></div>
+            <?php endif; ?>
 
-            <!-- Personal Information Tab -->
-            <div id="personal-content" class="tab-content p-6">
-                <form method="POST" enctype="multipart/form-data" class="space-y-6">
-                    <input type="hidden" name="update_type" value="personal">
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label for="name" class="block text-sm font-medium text-gray-700 mb-2">Full Name *</label>
-                            <input type="text" id="name" name="name" value="<?php echo htmlspecialchars($userData['Name']); ?>" 
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-orchid focus:border-dark-orchid" required>
-                        </div>
-                        
-                        <div>
-                            <label for="email" class="block text-sm font-medium text-gray-700 mb-2">Email Address *</label>
-                            <input type="email" id="email" name="email" value="<?php echo htmlspecialchars($userData['email']); ?>" 
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-orchid focus:border-dark-orchid" required>
-                        </div>
-                        
-                        <div>
-                            <label for="contactNo" class="block text-sm font-medium text-gray-700 mb-2">Contact Number</label>
-                            <input type="tel" id="contactNo" name="contactNo" value="<?php echo htmlspecialchars($userData['contactNo'] ?? ''); ?>" 
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-orchid focus:border-dark-orchid">
-                        </div>
-                        
-                        <div>
-                            <label for="profilePhoto" class="block text-sm font-medium text-gray-700 mb-2">Profile Photo</label>
-                            <input type="file" id="profilePhoto" name="profilePhoto" accept="image/*" 
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-orchid focus:border-dark-orchid">
-                            <p class="text-xs text-gray-500 mt-1">JPG, PNG, WebP, GIF (max 5MB)</p>
-                            <?php if ($userData['profilePhoto']): ?>
-                                <div class="mt-2">
-                                    <label class="flex items-center">
-                                        <input type="checkbox" name="removePhoto" value="1" class="mr-2">
-                                        <span class="text-sm text-red-600">Remove current photo</span>
-                                    </label>
+            <div class="bg-white p-8 rounded-lg shadow-orchid-custom">
+                <form action="caregiverProfile.php" method="POST" class="space-y-8" enctype="multipart/form-data">
+
+                    <div>
+                        <h3 class="text-xl font-semibold text-slate-800 border-b pb-2 mb-4">Personal Information</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label for="Name" class="block text-sm font-medium text-gray-700">Full Name</label>
+                                <input type="text" name="Name" id="Name" value="<?php echo htmlspecialchars($caregiverData['Name']); ?>" class="form-input" required>
+                            </div>
+                            <div>
+                                <label for="contactNo" class="block text-sm font-medium text-gray-700">Contact Number</label>
+                                <input type="tel" name="contactNo" id="contactNo" value="<?php echo htmlspecialchars($caregiverData['contactNo']); ?>" class="form-input" required>
+                            </div>
+                            <div>
+                                <label for="email" class="block text-sm font-medium text-gray-700">Email Address</label>
+                                <input type="email" id="email" value="<?php echo htmlspecialchars($caregiverData['email']); ?>" class="form-input bg-gray-100" readonly>
+                            </div>
+                            <div>
+                                <label for="nidNumber" class="block text-sm font-medium text-gray-700">NID Number</label>
+                                <input type="text" name="nidNumber" id="nidNumber" value="<?php echo htmlspecialchars($caregiverData['nidNumber']); ?>" class="form-input bg-gray-100" readonly>
+                                <p class="text-xs text-gray-500 mt-1">NID number cannot be changed</p>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700">Profile Photo</label>
+                                <div class="mt-2 flex items-center space-x-6">
+                                    <?php if (!empty($caregiverData['profilePhoto']) && file_exists($caregiverData['profilePhoto'])): ?>
+                                        <img src="<?php echo htmlspecialchars($caregiverData['profilePhoto']); ?>" alt="Current Profile Photo" class="h-20 w-20 rounded-full object-cover">
+                                    <?php else: ?>
+                                        <div class="h-20 w-20 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-2xl"><?php echo htmlspecialchars($userAvatar); ?></div>
+                                    <?php endif; ?>
+                                    <div>
+                                        <label for="profilePhoto" class="cursor-pointer bg-white py-2 px-3 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">
+                                            <span>Change Photo</span>
+                                            <input type="file" name="profilePhoto" id="profilePhoto" class="sr-only" accept="image/*">
+                                        </label>
+                                        <p class="text-xs text-gray-500 mt-1">PNG, JPG, WEBP up to 5MB.</p>
+                                    </div>
                                 </div>
-                            <?php endif; ?>
+                            </div>
                         </div>
                     </div>
-                    
-                    <div class="flex justify-end">
-                        <button type="submit" class="bg-dark-orchid text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition">
-                            <i class="fas fa-save mr-2"></i>Update Personal Information
+
+                    <div>
+                        <h3 class="text-xl font-semibold text-slate-800 border-b pb-2 mb-4">Professional Details</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <div class="lg:col-span-3">
+                                <label for="careGiverType" class="block text-sm font-medium text-gray-700">CareGiver Specialization</label>
+                                <select name="careGiverType" id="careGiverType" class="form-input" required>
+                                    <option value="">Select Specialization</option>
+                                    <option value="Nurse" <?php echo ($caregiverData['careGiverType'] == 'Nurse') ? 'selected' : ''; ?>>Nurse</option>
+                                    <option value="Physiotherapist" <?php echo ($caregiverData['careGiverType'] == 'Physiotherapist') ? 'selected' : ''; ?>>Physiotherapist</option>
+                                    <option value="Home Care Assistant" <?php echo ($caregiverData['careGiverType'] == 'Home Care Assistant') ? 'selected' : ''; ?>>Home Care Assistant</option>
+                                    <option value="Elderly Care Specialist" <?php echo ($caregiverData['careGiverType'] == 'Elderly Care Specialist') ? 'selected' : ''; ?>>Elderly Care Specialist</option>
+                                    <option value="Disabled Care Specialist" <?php echo ($caregiverData['careGiverType'] == 'Disabled Care Specialist') ? 'selected' : ''; ?>>Disabled Care Specialist</option>
+                                    <option value="Post-Surgery Care" <?php echo ($caregiverData['careGiverType'] == 'Post-Surgery Care') ? 'selected' : ''; ?>>Post-Surgery Care</option>
+                                    <option value="Chronic Disease Care" <?php echo ($caregiverData['careGiverType'] == 'Chronic Disease Care') ? 'selected' : ''; ?>>Chronic Disease Care</option>
+                                </select>
+                            </div>
+                            <div class="lg:col-span-3">
+                                <label for="certifications" class="block text-sm font-medium text-gray-700">Certifications & Qualifications</label>
+                                <textarea name="certifications" id="certifications" rows="3" class="form-input" placeholder="List your certifications, degrees, and professional qualifications..."><?php echo htmlspecialchars($caregiverData['certifications']); ?></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3 class="text-xl font-semibold text-slate-800 border-b pb-2 mb-4">Service Rates</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div>
+                                <label for="dailyRate" class="block text-sm font-medium text-gray-700">Daily Rate (৳)</label>
+                                <input type="number" step="0.01" name="dailyRate" id="dailyRate" value="<?php echo htmlspecialchars($caregiverData['dailyRate']); ?>" class="form-input" required>
+                            </div>
+                            <div>
+                                <label for="weeklyRate" class="block text-sm font-medium text-gray-700">Weekly Rate (৳)</label>
+                                <input type="number" step="0.01" name="weeklyRate" id="weeklyRate" value="<?php echo htmlspecialchars($caregiverData['weeklyRate']); ?>" class="form-input" required>
+                            </div>
+                            <div>
+                                <label for="monthlyRate" class="block text-sm font-medium text-gray-700">Monthly Rate (৳)</label>
+                                <input type="number" step="0.01" name="monthlyRate" id="monthlyRate" value="<?php echo htmlspecialchars($caregiverData['monthlyRate']); ?>" class="form-input" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3 class="text-xl font-semibold text-slate-800 border-b pb-2 mb-4">Documents & Verification</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label for="nidCopy" class="block text-sm font-medium text-gray-700">NID Copy</label>
+                                <input type="file" name="nidCopy" id="nidCopy" class="mt-1 block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100"/>
+                                <?php if(!empty($caregiverData['nidCopyURL']) && file_exists($caregiverData['nidCopyURL'])): ?>
+                                <a href="<?php echo htmlspecialchars($caregiverData['nidCopyURL']); ?>" target="_blank" class="text-sm text-purple-600 hover:underline mt-1 inline-block">View Current NID</a>
+                                <?php endif; ?>
+                            </div>
+                            <div>
+                                <label for="certificationDoc" class="block text-sm font-medium text-gray-700">Certification Documents</label>
+                                <input type="file" name="certificationDoc" id="certificationDoc" class="mt-1 block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100"/>
+                                <?php if(!empty($caregiverData['certificationURL']) && file_exists($caregiverData['certificationURL'])): ?>
+                                <a href="<?php echo htmlspecialchars($caregiverData['certificationURL']); ?>" target="_blank" class="text-sm text-purple-600 hover:underline mt-1 inline-block">View Current Certificates</a>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end pt-4 border-t mt-8">
+                        <button type="submit" class="bg-dark-orchid text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition font-semibold">
+                            <i class="fa-solid fa-save mr-2"></i>Save Changes
                         </button>
                     </div>
                 </form>
             </div>
-
-            <!-- Professional Information Tab -->
-            <div id="professional-content" class="tab-content p-6 hidden">
-                <form method="POST" enctype="multipart/form-data" class="space-y-6">
-                    <input type="hidden" name="update_type" value="professional">
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label for="careGiverType" class="block text-sm font-medium text-gray-700 mb-2">Caregiver Type *</label>
-                            <select id="careGiverType" name="careGiverType" 
-                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-orchid focus:border-dark-orchid" required>
-                                <option value="">Select Type</option>
-                                <option value="Nurse" <?php echo ($userData['careGiverType'] === 'Nurse') ? 'selected' : ''; ?>>Nurse</option>
-                                <option value="Home Health Aide" <?php echo ($userData['careGiverType'] === 'Home Health Aide') ? 'selected' : ''; ?>>Home Health Aide</option>
-                                <option value="Personal Care Assistant" <?php echo ($userData['careGiverType'] === 'Personal Care Assistant') ? 'selected' : ''; ?>>Personal Care Assistant</option>
-                                <option value="Physiotherapist" <?php echo ($userData['careGiverType'] === 'Physiotherapist') ? 'selected' : ''; ?>>Physiotherapist</option>
-                                <option value="Occupational Therapist" <?php echo ($userData['careGiverType'] === 'Occupational Therapist') ? 'selected' : ''; ?>>Occupational Therapist</option>
-                                <option value="Companion Care" <?php echo ($userData['careGiverType'] === 'Companion Care') ? 'selected' : ''; ?>>Companion Care</option>
-                                <option value="Specialized Care" <?php echo ($userData['careGiverType'] === 'Specialized Care') ? 'selected' : ''; ?>>Specialized Care</option>
-                            </select>
-                        </div>
-                        
-                        <div>
-                            <label for="nidNumber" class="block text-sm font-medium text-gray-700 mb-2">National ID Number *</label>
-                            <input type="text" id="nidNumber" name="nidNumber" value="<?php echo htmlspecialchars($userData['nidNumber'] ?? ''); ?>" 
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-orchid focus:border-dark-orchid" required>
-                        </div>
-                        
-                        <div class="md:col-span-2">
-                            <label for="certifications" class="block text-sm font-medium text-gray-700 mb-2">Certifications & Qualifications</label>
-                            <textarea id="certifications" name="certifications" rows="3" 
-                                      class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-orchid focus:border-dark-orchid"
-                                      placeholder="List your certifications, licenses, and qualifications..."><?php echo htmlspecialchars($userData['certifications'] ?? ''); ?></textarea>
-                        </div>
-                        
-                        <div>
-                            <label for="dailyRate" class="block text-sm font-medium text-gray-700 mb-2">Daily Rate (BDT)</label>
-                            <input type="number" id="dailyRate" name="dailyRate" step="0.01" min="0" 
-                                   value="<?php echo $userData['dailyRate'] ?? ''; ?>" 
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-orchid focus:border-dark-orchid">
-                        </div>
-                        
-                        <div>
-                            <label for="weeklyRate" class="block text-sm font-medium text-gray-700 mb-2">Weekly Rate (BDT)</label>
-                            <input type="number" id="weeklyRate" name="weeklyRate" step="0.01" min="0" 
-                                   value="<?php echo $userData['weeklyRate'] ?? ''; ?>" 
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-orchid focus:border-dark-orchid">
-                        </div>
-                        
-                        <div>
-                            <label for="monthlyRate" class="block text-sm font-medium text-gray-700 mb-2">Monthly Rate (BDT)</label>
-                            <input type="number" id="monthlyRate" name="monthlyRate" step="0.01" min="0" 
-                                   value="<?php echo $userData['monthlyRate'] ?? ''; ?>" 
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-orchid focus:border-dark-orchid">
-                        </div>
-                        
-                        <div>
-                            <label for="nidCopyURL" class="block text-sm font-medium text-gray-700 mb-2">National ID Copy</label>
-                            <input type="file" id="nidCopyURL" name="nidCopyURL" accept="image/*,application/pdf" 
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-orchid focus:border-dark-orchid">
-                            <p class="text-xs text-gray-500 mt-1">Image or PDF (max 5MB)</p>
-                            <?php if ($userData['nidCopyURL']): ?>
-                                <p class="text-xs text-green-600 mt-1">
-                                    <i class="fas fa-check mr-1"></i>Current file: <?php echo basename($userData['nidCopyURL']); ?>
-                                </p>
-                            <?php endif; ?>
-                        </div>
-                        
-                        <div>
-                            <label for="certificationURL" class="block text-sm font-medium text-gray-700 mb-2">Certification Documents</label>
-                            <input type="file" id="certificationURL" name="certificationURL" accept="image/*,application/pdf" 
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-orchid focus:border-dark-orchid">
-                            <p class="text-xs text-gray-500 mt-1">Image or PDF (max 5MB)</p>
-                            <?php if ($userData['certificationURL']): ?>
-                                <p class="text-xs text-green-600 mt-1">
-                                    <i class="fas fa-check mr-1"></i>Current file: <?php echo basename($userData['certificationURL']); ?>
-                                </p>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                    
-                    <div class="flex justify-end">
-                        <button type="submit" class="bg-dark-orchid text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition">
-                            <i class="fas fa-save mr-2"></i>Update Professional Information
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </main>
-
-    <script>
-        function showTab(tabName) {
-            // Hide all tab contents
-            const contents = document.querySelectorAll('.tab-content');
-            contents.forEach(content => content.classList.add('hidden'));
-            
-            // Remove active class from all tabs
-            const tabs = document.querySelectorAll('.tab-button');
-            tabs.forEach(tab => {
-                tab.classList.remove('border-dark-orchid', 'text-dark-orchid');
-                tab.classList.add('border-transparent', 'text-gray-500');
-            });
-            
-            // Show selected tab content
-            document.getElementById(tabName + '-content').classList.remove('hidden');
-            
-            // Add active class to selected tab
-            const activeTab = document.getElementById(tabName + '-tab');
-            activeTab.classList.remove('border-transparent', 'text-gray-500');
-            activeTab.classList.add('border-dark-orchid', 'text-dark-orchid');
-        }
-
-        // Rate calculation helpers
-        document.getElementById('dailyRate').addEventListener('input', function() {
-            const daily = parseFloat(this.value) || 0;
-            if (daily > 0) {
-                document.getElementById('weeklyRate').value = (daily * 7).toFixed(2);
-                document.getElementById('monthlyRate').value = (daily * 30).toFixed(2);
-            }
-        });
-
-        document.getElementById('weeklyRate').addEventListener('input', function() {
-            const weekly = parseFloat(this.value) || 0;
-            if (weekly > 0) {
-                document.getElementById('dailyRate').value = (weekly / 7).toFixed(2);
-                document.getElementById('monthlyRate').value = (weekly * 4.29).toFixed(2);
-            }
-        });
-
-        document.getElementById('monthlyRate').addEventListener('input', function() {
-            const monthly = parseFloat(this.value) || 0;
-            if (monthly > 0) {
-                document.getElementById('dailyRate').value = (monthly / 30).toFixed(2);
-                document.getElementById('weeklyRate').value = (monthly / 4.29).toFixed(2);
-            }
-        });
-    </script>
+        </main>
+    </div>
 </body>
 </html>
