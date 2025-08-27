@@ -85,7 +85,6 @@ $conn->close();
 </head>
 <body class="bg-purple-50">
     <div class="flex min-h-screen">
-        <!-- Sidebar -->
         <aside class="w-64 bg-white border-r">
             <div class="p-6">
                 <a href="#" class="text-2xl font-bold text-dark-orchid">CarePlus</a>
@@ -98,6 +97,11 @@ $conn->close();
                 <a href="patientProfile.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
                     <i class="fa-regular fa-user w-5"></i>
                     <span>My Profile</span>
+                </a>
+                
+                <a href="find_provider.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
+                    <i class="fa-solid fa-calendar-plus w-5"></i>
+                    <span>Book Appointment</span>
                 </a>
                 <a href="patientAppointments.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
                     <i class="fa-solid fa-calendar-days w-5"></i>
@@ -120,9 +124,7 @@ $conn->close();
             </nav>
         </aside>
 
-        <!-- Main Content -->
         <main class="flex-1 p-8">
-            <!-- Header -->
             <header class="flex justify-between items-center mb-8">
                 <div>
                     <h1 class="text-3xl font-bold text-slate-800">Welcome back, <?php echo htmlspecialchars($userName); ?>!</h1>
@@ -139,7 +141,6 @@ $conn->close();
                 </div>
             </header>
 
-            <!-- Stats Cards -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
                 <div class="stat-card text-white p-6 rounded-lg">
                     <div class="flex items-center justify-between">
@@ -170,7 +171,6 @@ $conn->close();
                 </div>
             </div>
 
-            <!-- Quick Actions -->
             <div class="mb-8">
                 <h2 class="text-2xl font-bold text-slate-800 mb-6">Quick Actions</h2>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -197,9 +197,7 @@ $conn->close();
                 </div>
             </div>
 
-            <!-- Recent Activity & Health Overview -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <!-- Health Overview -->
                 <div class="bg-white p-6 rounded-lg shadow-orchid-custom">
                     <h3 class="text-xl font-bold text-slate-800 mb-4">Health Overview</h3>
                     <?php if ($patientInfo): ?>
@@ -251,11 +249,9 @@ $conn->close();
                     <?php endif; ?>
                 </div>
 
-                <!-- Recent Activity -->
                 <div class="bg-white p-6 rounded-lg shadow-orchid-custom">
                     <h3 class="text-xl font-bold text-slate-800 mb-4">Recent Activity</h3>
                     <div class="space-y-4">
-                        <!-- This will be populated with actual data from appointments and bookings -->
                         <div class="text-center py-8 text-gray-500">
                             <i class="fa-solid fa-clock fa-2x mb-3"></i>
                             <p>No recent activity</p>
