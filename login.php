@@ -1,69 +1,103 @@
 <?php
 session_start();
-
-// --- Database Connection ---
 $conn = require_once 'config.php';
-
 $errorMsg = "";
-$successMsg = "";
+$successMsg = ""; // Initialize success message to fix the warning
 
-// Check if the user was just redirected from the registration page
-if (isset($_GET['registered']) && $_GET['registered'] === 'success') {
-    $successMsg = "Registration successful! Please log in.";
+// Add a success message for pending admin registration
+if (isset($_GET['registered']) && $_GET['registered'] === 'admin_pending') {
+    $successMsg = "Admin account created! It is now pending approval from a super-administrator.";
 }
 
-// Handle login form submission
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $email = $_POST['email'];
     $inputPassword = $_POST['password'];
 
-    // Prepare a statement to select the user from the database
-    $stmt = $conn->prepare("SELECT userID, Name, password, role FROM Users WHERE email = ?");
+    $stmt = $conn->prepare("SELECT userID, Name, password, role, verification_status, payment_status FROM Users WHERE email = ?");
     $stmt->bind_param("s", $email);
     $stmt->execute();
     $stmt->store_result();
 
-    // Check if a user with that email exists
     if ($stmt->num_rows === 1) {
-        $stmt->bind_result($userID, $Name, $hashedPassword, $role);
+        $stmt->bind_result($userID, $Name, $hashedPassword, $role, $verification_status, $payment_status);
         $stmt->fetch();
+        $stmt->close(); 
 
-        // Verify the password
         if (password_verify($inputPassword, $hashedPassword)) {
-            // Password is correct, so start a new session
-            $_SESSION['userID'] = $userID;
-            $_SESSION['Name'] = $Name;
-            $_SESSION['role'] = $role;
+            $detailsSubmitted = true; 
 
-            // --- REDIRECT TO ROLE-SPECIFIC DASHBOARD ---
-            switch ($role) {
-                case 'Patient':
-                    header("Location: patientDashboard.php");
-                    break;
-                case 'Doctor':
-                    header("Location: doctorDashboard.php");
-                    break;
-                case 'Nutritionist':
-                    header("Location: nutritionistDashboard.php");
-                    break;
-                case 'CareGiver':
-                    header("Location: careGiverDashboard.php");
-                    break;
-                case 'Admin':
-                    header("Location: adminDashboard.php");
-                    break;
-                default:
-                    $errorMsg = "Invalid user role.";
-                    break;
+            // STEP 1: Check if a professional has submitted their details (skip for Admins and Patients)
+            if (in_array($role, ['Doctor', 'Nutritionist', 'CareGiver'])) {
+                $detailsQuery = "";
+                if ($role === 'Doctor') $detailsQuery = "SELECT specialty FROM doctor WHERE doctorID = ?";
+                if ($role === 'Nutritionist') $detailsQuery = "SELECT specialty FROM nutritionist WHERE nutritionistID = ?";
+                if ($role === 'CareGiver') $detailsQuery = "SELECT careGiverType FROM caregiver WHERE careGiverID = ?";
+                
+                if ($detailsQuery) { // Ensure query is set before preparing
+                    $detailsStmt = $conn->prepare($detailsQuery);
+                    $detailsStmt->bind_param("i", $userID);
+                    $detailsStmt->execute();
+                    $detailsResult = $detailsStmt->get_result()->fetch_assoc();
+                    if (!$detailsResult || empty(current($detailsResult))) {
+                        $detailsSubmitted = false;
+                    }
+                    $detailsStmt->close();
+                }
+
+                if (!$detailsSubmitted) {
+                    $_SESSION['pending_user_id'] = $userID;
+                    $_SESSION['pending_user_role'] = $role;
+                    $redirectUrl = "";
+                    switch ($role) {
+                        case 'Doctor': $redirectUrl = "doctorDetailsForm.php"; break;
+                        case 'Nutritionist': $redirectUrl = "nutritionistDetailsForm.php"; break;
+                        case 'CareGiver': $redirectUrl = "careGiverDetailsForm.php"; break;
+                    }
+                    header("Location: " . $redirectUrl);
+                    exit();
+                }
             }
-            exit();
+
+            // STEP 2: Check for payment (Admins are exempt as their status is 'Paid' by default)
+            if ($payment_status === 'Unpaid') {
+                $_SESSION['pending_user_id'] = $userID; 
+                header("Location: payment.php");
+                exit();
+            } 
+            
+            // STEP 3: For non-patients, check for admin approval
+            elseif ($role !== 'Patient' && $verification_status === 'Pending') {
+                $errorMsg = "Your account is awaiting approval from an administrator.";
+            } 
+            elseif ($role !== 'Patient' && $verification_status === 'Rejected') {
+                $errorMsg = "Your account application has been rejected. Please contact support.";
+            } 
+            
+            // STEP 4: If all checks pass, log the user in
+            elseif ($verification_status === 'Approved' && $payment_status === 'Paid') {
+                $_SESSION['userID'] = $userID;
+                $_SESSION['Name'] = $Name;
+                $_SESSION['role'] = $role;
+
+                $redirectUrl = "login.php";
+                switch ($role) {
+                    case 'Patient': $redirectUrl = "patientDashboard.php"; break;
+                    case 'Doctor': $redirectUrl = "doctorDashboard.php"; break;
+                    case 'Nutritionist': $redirectUrl = "nutritionistDashboard.php"; break;
+                    case 'CareGiver': $redirectUrl = "careGiverDashboard.php"; break;
+                    case 'Admin': $redirectUrl = "adminDashboard.php"; break;
+                }
+                header("Location: " . $redirectUrl);
+                exit();
+            } else {
+                 $errorMsg = "Your account is inactive. Please contact support.";
+            }
         } else {
             $errorMsg = "Incorrect password.";
         }
     } else {
         $errorMsg = "No user found with that email address.";
     }
-    $stmt->close();
 }
 $conn->close();
 ?>
