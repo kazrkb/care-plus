@@ -1,8 +1,10 @@
 <?php
 session_start();
 $conn = require_once 'config.php';
+date_default_timezone_set('Asia/Dhaka');
+
 $errorMsg = "";
-$successMsg = ""; // Initialize success message to fix the warning
+$successMsg = ""; 
 
 // Add a success message for pending admin registration
 if (isset($_GET['registered']) && $_GET['registered'] === 'admin_pending') {
@@ -25,6 +27,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         if (password_verify($inputPassword, $hashedPassword)) {
             $detailsSubmitted = true; 
+            $redirectUrl = "";
 
             // STEP 1: Check if a professional has submitted their details (skip for Admins and Patients)
             if (in_array($role, ['Doctor', 'Nutritionist', 'CareGiver'])) {
@@ -33,7 +36,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 if ($role === 'Nutritionist') $detailsQuery = "SELECT specialty FROM nutritionist WHERE nutritionistID = ?";
                 if ($role === 'CareGiver') $detailsQuery = "SELECT careGiverType FROM caregiver WHERE careGiverID = ?";
                 
-                if ($detailsQuery) { // Ensure query is set before preparing
+                if ($detailsQuery) {
                     $detailsStmt = $conn->prepare($detailsQuery);
                     $detailsStmt->bind_param("i", $userID);
                     $detailsStmt->execute();
@@ -47,7 +50,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 if (!$detailsSubmitted) {
                     $_SESSION['pending_user_id'] = $userID;
                     $_SESSION['pending_user_role'] = $role;
-                    $redirectUrl = "";
                     switch ($role) {
                         case 'Doctor': $redirectUrl = "doctorDetailsForm.php"; break;
                         case 'Nutritionist': $redirectUrl = "nutritionistDetailsForm.php"; break;
@@ -58,7 +60,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 }
             }
 
-            // STEP 2: Check for payment (Admins are exempt as their status is 'Paid' by default)
+            // STEP 2: Check for payment (Admins are exempt)
             if ($payment_status === 'Unpaid') {
                 $_SESSION['pending_user_id'] = $userID; 
                 header("Location: payment.php");
