@@ -284,10 +284,15 @@ function formatAppointmentDate($datetime) {
                     <i class="fa-regular fa-user w-5"></i>
                     <span>My Profile</span>
                 </a>
+                 <a href="find_provider.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
+                    <i class="fa-solid fa-calendar-plus w-5"></i>
+                    <span>Book Appointment</span>
+                </a>
                 <a href="patientAppointments.php" class="flex items-center space-x-3 px-4 py-3 bg-purple-100 text-dark-orchid rounded-lg">
                     <i class="fa-solid fa-calendar-days w-5"></i>
                     <span>My Appointments</span>
                 </a>
+                
                 <a href="my_bookings.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
                     <i class="fa-solid fa-hands-holding-child w-5"></i>
                     <span>My Caregiver Bookings</span>
