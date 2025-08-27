@@ -116,6 +116,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (Exception $e) {
             $errorMsg = "Error updating care plan: " . $e->getMessage();
         }
+    } elseif (isset($_POST['delete_careplan'])) {
+        // Delete existing care plan
+        $planID = $_POST['planID'];
+        
+        try {
+            // Verify plan belongs to this caregiver before deletion
+            $verifyPlanSql = "SELECT planID FROM careplan WHERE planID = ? AND careID = ?";
+            $verifyStmt = $conn->prepare($verifyPlanSql);
+            $verifyStmt->bind_param("ii", $planID, $caregiverID);
+            $verifyStmt->execute();
+            $verifyResult = $verifyStmt->get_result();
+            
+            if ($verifyResult->num_rows === 0) {
+                $errorMsg = "Care plan not found or access denied.";
+            } else {
+                // Delete care plan
+                $deleteSql = "DELETE FROM careplan WHERE planID = ? AND careID = ?";
+                $deleteStmt = $conn->prepare($deleteSql);
+                $deleteStmt->bind_param("ii", $planID, $caregiverID);
+                
+                if ($deleteStmt->execute()) {
+                    $successMsg = "Care plan deleted successfully!";
+                } else {
+                    $errorMsg = "Error deleting care plan: " . $conn->error;
+                }
+                $deleteStmt->close();
+            }
+            $verifyStmt->close();
+        } catch (Exception $e) {
+            $errorMsg = "Error deleting care plan: " . $e->getMessage();
+        }
     }
 }
 
@@ -471,7 +502,7 @@ $conn->close();
                 <?php if (!empty($existingPlans)): ?>
                     <div class="space-y-4">
                         <?php foreach ($existingPlans as $plan): ?>
-                            <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition">
+                            <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition" id="plan-<?php echo $plan['planID']; ?>">
                                 <div class="flex justify-between items-start mb-3">
                                     <div>
                                         <h3 class="font-semibold text-slate-800">
@@ -492,7 +523,8 @@ $conn->close();
                                     </div>
                                 </div>
                                 
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                                <!-- Care Plan Content Display -->
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mb-4" id="content-<?php echo $plan['planID']; ?>">
                                     <?php if (!empty($plan['exercisePlan'])): ?>
                                         <div>
                                             <label class="font-medium text-orange-700">Exercise Plan:</label>
@@ -514,6 +546,49 @@ $conn->close();
                                         </div>
                                     <?php endif; ?>
                                 </div>
+
+                                <!-- Edit Form (Initially Hidden) -->
+                                <div class="hidden space-y-4" id="edit-form-<?php echo $plan['planID']; ?>">
+                                    <form method="POST" action="" class="space-y-4">
+                                        <input type="hidden" name="update_careplan" value="1">
+                                        <input type="hidden" name="planID" value="<?php echo $plan['planID']; ?>">
+                                        
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-2">Plan Date</label>
+                                            <input type="date" name="planDate" value="<?php echo $plan['date']; ?>" 
+                                                   class="form-input" required>
+                                        </div>
+                                        
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-2">Exercise Plan</label>
+                                            <textarea name="exercisePlan" rows="3" class="form-input" 
+                                                      placeholder="Update exercise plan..."><?php echo htmlspecialchars($plan['exercisePlan']); ?></textarea>
+                                        </div>
+                                        
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-2">Therapy Instructions</label>
+                                            <textarea name="therapyInstructions" rows="3" class="form-input" 
+                                                      placeholder="Update therapy instructions..."><?php echo htmlspecialchars($plan['therapyInstructions']); ?></textarea>
+                                        </div>
+                                        
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-2">Progress Notes</label>
+                                            <textarea name="progressNotes" rows="3" class="form-input" 
+                                                      placeholder="Update progress notes..."><?php echo htmlspecialchars($plan['progressNotes']); ?></textarea>
+                                        </div>
+                                        
+                                        <div class="flex justify-end space-x-3 pt-3 border-t">
+                                            <button type="button" onclick="cancelEdit(<?php echo $plan['planID']; ?>)" 
+                                                    class="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium">
+                                                <i class="fa-solid fa-times mr-1"></i>Cancel
+                                            </button>
+                                            <button type="submit" 
+                                                    class="px-6 py-2 bg-dark-orchid text-white rounded-lg hover:bg-purple-700 transition font-semibold">
+                                                <i class="fa-solid fa-save mr-1"></i>Update Plan
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
                                 
                                 <div class="flex justify-between items-center mt-4 pt-3 border-t border-gray-100">
                                     <div class="flex items-center text-xs text-gray-500">
@@ -522,12 +597,47 @@ $conn->close();
                                         <?php echo date('M d, Y', strtotime($plan['endDate'])); ?>
                                     </div>
                                     <div class="space-x-2">
-                                        <button class="text-blue-600 hover:text-blue-800 text-sm font-medium">
-                                            <i class="fa-solid fa-eye mr-1"></i>View
+                                        <button onclick="toggleView(<?php echo $plan['planID']; ?>)" 
+                                                class="text-blue-600 hover:text-blue-800 text-sm font-medium" 
+                                                id="view-btn-<?php echo $plan['planID']; ?>">
+                                            <i class="fa-solid fa-eye mr-1"></i>View Full
                                         </button>
-                                        <button class="text-purple-600 hover:text-purple-800 text-sm font-medium">
+                                        <button onclick="toggleEdit(<?php echo $plan['planID']; ?>)" 
+                                                class="text-purple-600 hover:text-purple-800 text-sm font-medium"
+                                                id="edit-btn-<?php echo $plan['planID']; ?>">
                                             <i class="fa-solid fa-edit mr-1"></i>Edit
                                         </button>
+                                        <button onclick="deletePlan(<?php echo $plan['planID']; ?>)" 
+                                                class="text-red-600 hover:text-red-800 text-sm font-medium">
+                                            <i class="fa-solid fa-trash mr-1"></i>Delete
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Full View Modal Content (Initially Hidden) -->
+                                <div class="hidden mt-4 p-4 bg-gray-50 rounded-lg" id="full-view-<?php echo $plan['planID']; ?>">
+                                    <h4 class="font-semibold text-gray-800 mb-3">Complete Care Plan Details</h4>
+                                    <div class="space-y-3 text-sm">
+                                        <?php if (!empty($plan['exercisePlan'])): ?>
+                                            <div>
+                                                <label class="font-medium text-orange-700">Exercise Plan:</label>
+                                                <p class="text-gray-700 mt-1 whitespace-pre-wrap"><?php echo htmlspecialchars($plan['exercisePlan']); ?></p>
+                                            </div>
+                                        <?php endif; ?>
+                                        
+                                        <?php if (!empty($plan['therapyInstructions'])): ?>
+                                            <div>
+                                                <label class="font-medium text-purple-700">Therapy Instructions:</label>
+                                                <p class="text-gray-700 mt-1 whitespace-pre-wrap"><?php echo htmlspecialchars($plan['therapyInstructions']); ?></p>
+                                            </div>
+                                        <?php endif; ?>
+                                        
+                                        <?php if (!empty($plan['progressNotes'])): ?>
+                                            <div>
+                                                <label class="font-medium text-blue-700">Progress Notes:</label>
+                                                <p class="text-gray-700 mt-1 whitespace-pre-wrap"><?php echo htmlspecialchars($plan['progressNotes']); ?></p>
+                                            </div>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
                             </div>
@@ -546,6 +656,38 @@ $conn->close();
         </main>
     </div>
 
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3 text-center">
+                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+                    <i class="fa-solid fa-exclamation-triangle text-red-600 text-xl"></i>
+                </div>
+                <h3 class="text-lg font-medium text-gray-900 mt-4">Delete Care Plan</h3>
+                <div class="mt-2 px-7 py-3">
+                    <p class="text-sm text-gray-500">
+                        Are you sure you want to delete this care plan? This action cannot be undone.
+                    </p>
+                </div>
+                <form method="POST" action="" id="deleteForm">
+                    <input type="hidden" name="delete_careplan" value="1">
+                    <input type="hidden" name="planID" id="deletePlanID" value="">
+                    
+                    <div class="flex justify-center space-x-3 mt-4">
+                        <button type="button" onclick="closeDeleteModal()" 
+                                class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">
+                            Cancel
+                        </button>
+                        <button type="submit" 
+                                class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">
+                            <i class="fa-solid fa-trash mr-1"></i>Delete Plan
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Auto-hide success/error messages after 5 seconds
         setTimeout(function() {
@@ -556,6 +698,80 @@ $conn->close();
                 setTimeout(() => alert.remove(), 500);
             });
         }, 5000);
+
+        // Toggle full view of care plan details
+        function toggleView(planID) {
+            const fullView = document.getElementById('full-view-' + planID);
+            const viewBtn = document.getElementById('view-btn-' + planID);
+            
+            if (fullView.classList.contains('hidden')) {
+                fullView.classList.remove('hidden');
+                viewBtn.innerHTML = '<i class="fa-solid fa-eye-slash mr-1"></i>Hide Details';
+            } else {
+                fullView.classList.add('hidden');
+                viewBtn.innerHTML = '<i class="fa-solid fa-eye mr-1"></i>View Full';
+            }
+        }
+
+        // Toggle edit mode for care plan
+        function toggleEdit(planID) {
+            const content = document.getElementById('content-' + planID);
+            const editForm = document.getElementById('edit-form-' + planID);
+            const editBtn = document.getElementById('edit-btn-' + planID);
+            const fullView = document.getElementById('full-view-' + planID);
+            
+            if (editForm.classList.contains('hidden')) {
+                // Show edit form
+                content.classList.add('hidden');
+                editForm.classList.remove('hidden');
+                fullView.classList.add('hidden'); // Hide full view if open
+                editBtn.innerHTML = '<i class="fa-solid fa-times mr-1"></i>Cancel';
+                editBtn.className = 'text-gray-600 hover:text-gray-800 text-sm font-medium';
+            } else {
+                // Hide edit form
+                content.classList.remove('hidden');
+                editForm.classList.add('hidden');
+                editBtn.innerHTML = '<i class="fa-solid fa-edit mr-1"></i>Edit';
+                editBtn.className = 'text-purple-600 hover:text-purple-800 text-sm font-medium';
+            }
+        }
+
+        // Cancel edit mode
+        function cancelEdit(planID) {
+            const content = document.getElementById('content-' + planID);
+            const editForm = document.getElementById('edit-form-' + planID);
+            const editBtn = document.getElementById('edit-btn-' + planID);
+            
+            content.classList.remove('hidden');
+            editForm.classList.add('hidden');
+            editBtn.innerHTML = '<i class="fa-solid fa-edit mr-1"></i>Edit';
+            editBtn.className = 'text-purple-600 hover:text-purple-800 text-sm font-medium';
+        }
+
+        // Show delete confirmation modal
+        function deletePlan(planID) {
+            document.getElementById('deletePlanID').value = planID;
+            document.getElementById('deleteModal').classList.remove('hidden');
+        }
+
+        // Close delete modal
+        function closeDeleteModal() {
+            document.getElementById('deleteModal').classList.add('hidden');
+        }
+
+        // Close modal when clicking outside
+        document.getElementById('deleteModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeDeleteModal();
+            }
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeDeleteModal();
+            }
+        });
     </script>
 </body>
 </html>
