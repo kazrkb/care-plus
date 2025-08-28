@@ -22,8 +22,12 @@ $filter_type = $_GET['type'] ?? '';
 $totalRevenue = $conn->query("SELECT SUM(amount) as total FROM transaction")->fetch_assoc()['total'] ?? 0;
 $todayRevenue = $conn->query("SELECT SUM(amount) as total FROM transaction WHERE DATE(timestamp) = CURDATE()")->fetch_assoc()['total'] ?? 0;
 $totalTransactions = $conn->query("SELECT COUNT(*) as count FROM transaction")->fetch_assoc()['count'];
+$platformRevenueQuery = "SELECT SUM(amount) as total FROM transaction WHERE transactionType != 'Registration Fee'";
+$billableRevenue = $conn->query($platformRevenueQuery)->fetch_assoc()['total'] ?? 0;
+$platformEarnings = $billableRevenue * 0.30;
 
-// --- Build Dynamic Query to Fetch All Transactions ---
+
+// --- Build Dynamic Query to Fetch Transactions with User Role ---
 $query = "
     SELECT
         t.transactionID, t.amount, t.transactionType, t.status, t.timestamp, t.gatewayTransactionID,
@@ -78,12 +82,8 @@ $allTransactions = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
 // --- Separate transactions into role-based arrays for the tabs ---
 $transactionsByRole = [
-    'Doctor' => [],
-    'Patient' => [],
-    'Nutritionist' => [],
-    'CareGiver' => []
+    'Doctor' => [], 'Patient' => [], 'Nutritionist' => [], 'CareGiver' => []
 ];
-
 foreach ($allTransactions as $trans) {
     if (isset($transactionsByRole[$trans['userRole']])) {
         $transactionsByRole[$trans['userRole']][] = $trans;
@@ -93,27 +93,19 @@ foreach ($allTransactions as $trans) {
 $conn->close();
 
 // Helper function to render the table for each tab
-function render_transaction_table($transactions, $role) {
+function render_transaction_table($transactions) {
     if (empty($transactions)) {
-        return '<p class="text-center py-10 text-gray-500">No transactions found for this category.</p>';
+        return '<p class="text-center py-10 text-gray-500">No transactions found matching your criteria.</p>';
     }
-    $html = '<div class="overflow-x-auto"><table class="w-full text-sm text-left">
-                <thead class="text-xs text-gray-700 uppercase bg-gray-50">
-                    <tr>
-                        <th class="px-6 py-3">Transaction ID</th>
-                        <th class="px-6 py-3">User Name</th>
-                        <th class="px-6 py-3">Amount</th>
-                        <th class="px-6 py-3">Type</th>
-                        <th class="px-6 py-3">Date</th>
-                    </tr>
-                </thead><tbody>';
+    $html = '<div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead class="text-xs text-gray-700 uppercase bg-gray-50"><tr><th class="px-6 py-3">Transaction ID</th><th class="px-6 py-3">User Name</th><th class="px-6 py-3">Amount</th><th class="px-6 py-3">Type</th><th class="px-6 py-3">Status</th><th class="px-6 py-3">Date</th></tr></thead><tbody>';
     foreach ($transactions as $trans) {
         $html .= '<tr class="border-b hover:bg-gray-50">';
-        $html .= '<td class="px-6 py-4 font-mono text-xs text-gray-500">#' . htmlspecialchars($trans['gatewayTransactionID'] ?? $trans['transactionID']) . '</td>';
-        $html .= '<td class="px-6 py-4 font-semibold">' . htmlspecialchars($trans['userName'] ?? 'N/A') . '</td>';
-        $html .= '<td class="px-6 py-4">৳' . htmlspecialchars(number_format($trans['amount'], 2)) . '</td>';
-        $html .= '<td class="px-6 py-4">' . htmlspecialchars($trans['transactionType']) . '</td>';
-        $html .= '<td class="px-6 py-4">' . date("M d, Y h:i A", strtotime($trans['timestamp'])) . '</td>';
+        $html .= '<td class="px-6 py-4 font-mono text-xs text-gray-500">#'.htmlspecialchars($trans['gatewayTransactionID'] ?? $trans['transactionID']).'</td>';
+        $html .= '<td class="px-6 py-4 font-semibold">'.htmlspecialchars($trans['userName'] ?? 'N/A').'</td>';
+        $html .= '<td class="px-6 py-4">৳'.htmlspecialchars(number_format($trans['amount'], 2)).'</td>';
+        $html .= '<td class="px-6 py-4">'.htmlspecialchars($trans['transactionType']).'</td>';
+        $html .= '<td class="px-6 py-4"><span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">'.htmlspecialchars($trans['status']).'</span></td>';
+        $html .= '<td class="px-6 py-4">'.date("M d, Y h:i A", strtotime($trans['timestamp'])).'</td>';
         $html .= '</tr>';
     }
     $html .= '</tbody></table></div>';
@@ -157,8 +149,9 @@ function render_transaction_table($transactions, $role) {
                 </div>
             </header>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 <div class="bg-white p-6 rounded-lg shadow-md"><p class="text-sm text-gray-500">Total Revenue</p><p class="text-2xl font-bold text-slate-800">৳<?php echo number_format($totalRevenue, 2); ?></p></div>
+                <div class="bg-white p-6 rounded-lg shadow-md"><p class="text-sm text-gray-500">Platform Earnings (30%)</p><p class="text-2xl font-bold text-green-600">৳<?php echo number_format($platformEarnings, 2); ?></p></div>
                 <div class="bg-white p-6 rounded-lg shadow-md"><p class="text-sm text-gray-500">Revenue (Today)</p><p class="text-2xl font-bold text-slate-800">৳<?php echo number_format($todayRevenue, 2); ?></p></div>
                 <div class="bg-white p-6 rounded-lg shadow-md"><p class="text-sm text-gray-500">Total Transactions</p><p class="text-2xl font-bold text-slate-800"><?php echo $totalTransactions; ?></p></div>
             </div>
@@ -192,21 +185,27 @@ function render_transaction_table($transactions, $role) {
                     </nav>
                 </div>
                 
-                <div id="all-panel" class="tab-panel mt-4"><?php echo render_transaction_table($allTransactions, 'all'); ?></div>
-                <div id="doctors-panel" class="tab-panel mt-4 hidden"><?php echo render_transaction_table($transactionsByRole['Doctor'], 'doctors'); ?></div>
-                <div id="nutritionists-panel" class="tab-panel mt-4 hidden"><?php echo render_transaction_table($transactionsByRole['Nutritionist'], 'nutritionists'); ?></div>
-                <div id="patients-panel" class="tab-panel mt-4 hidden"><?php echo render_transaction_table($transactionsByRole['Patient'], 'patients'); ?></div>
-                <div id="caregivers-panel" class="tab-panel mt-4 hidden"><?php echo render_transaction_table($transactionsByRole['CareGiver'], 'caregivers'); ?></div>
+                <div id="all-panel" class="tab-panel mt-4"><?php echo render_transaction_table($allTransactions); ?></div>
+                <div id="doctors-panel" class="tab-panel mt-4 hidden"><?php echo render_transaction_table($transactionsByRole['Doctor']); ?></div>
+                <div id="nutritionists-panel" class="tab-panel mt-4 hidden"><?php echo render_transaction_table($transactionsByRole['Nutritionist']); ?></div>
+                <div id="patients-panel" class="tab-panel mt-4 hidden"><?php echo render_transaction_table($transactionsByRole['Patient']); ?></div>
+                <div id="caregivers-panel" class="tab-panel mt-4 hidden"><?php echo render_transaction_table($transactionsByRole['CareGiver']); ?></div>
             </div>
         </main>
     </div>
     <script>
         function openTab(evt, tabName) {
             document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
-            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(b => {
+                b.classList.remove('active', 'text-purple-600', 'border-purple-500');
+                b.classList.add('text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+            });
             document.getElementById(tabName + '-panel').classList.remove('hidden');
-            evt.currentTarget.classList.add('active');
+            evt.currentTarget.classList.add('active', 'text-purple-600', 'border-purple-500');
+            evt.currentTarget.classList.remove('text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
         }
+        // Set the default tab to be active on page load
+        document.querySelector('.tab-button').click();
     </script>
 </body>
 </html>
