@@ -17,7 +17,7 @@ $errorMsg = "";
 
 // --- Handle Booking Submission ---
 if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['book_caregiver'])) {
-   
+
     // Check if an availability slot was selected first
     if (!isset($_POST['availabilityID'])) {
         $errorMsg = "Please select an available time slot before booking.";
@@ -32,7 +32,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['book_caregiver'])) {
             $stmt->bind_param("i", $availabilityID);
             $stmt->execute();
             $result = $stmt->get_result();
-           
+
             if ($result->num_rows === 0) {
                 throw new Exception("This time slot is no longer available. Please select another.");
             }
@@ -43,26 +43,26 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['book_caregiver'])) {
             $bookingType = $slotDetails['bookingType'];
             $startDate = $slotDetails['startDate'];
             $endDate = new DateTime($startDate);
-            
+
             // Get caregiver rates
             $rateQuery = $conn->prepare("SELECT dailyRate, weeklyRate, monthlyRate FROM caregiver WHERE careGiverID = ?");
             $rateQuery->bind_param("i", $careGiverID);
             $rateQuery->execute();
             $rates = $rateQuery->get_result()->fetch_assoc();
             $rateQuery->close();
-            
+
             $totalAmount = 0;
-            if ($bookingType == 'Daily') { 
-                $endDate->modify('+1 day'); 
-                $totalAmount = $rates['dailyRate']; 
+            if ($bookingType == 'Daily') {
+                $endDate->modify('+1 day');
+                $totalAmount = $rates['dailyRate'];
             }
-            if ($bookingType == 'Weekly') { 
-                $endDate->modify('+7 days'); 
-                $totalAmount = $rates['weeklyRate']; 
+            if ($bookingType == 'Weekly') {
+                $endDate->modify('+7 days');
+                $totalAmount = $rates['weeklyRate'];
             }
-            if ($bookingType == 'Monthly') { 
-                $endDate->modify('+1 month'); 
-                $totalAmount = $rates['monthlyRate']; 
+            if ($bookingType == 'Monthly') {
+                $endDate->modify('+1 month');
+                $totalAmount = $rates['monthlyRate'];
             }
 
             // Check for conflicts
@@ -79,7 +79,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['book_caregiver'])) {
             $stmt->bind_param("i", $availabilityID);
             $stmt->execute();
             $stmt->close();
-           
+
             // Create booking record
             $stmt = $conn->prepare("INSERT INTO caregiverbooking (patientID, careGiverID, bookingType, startDate, endDate, totalAmount, status, availabilityID) VALUES (?, ?, ?, ?, ?, ?, 'Scheduled', ?)");
             $stmt->bind_param("iisssdi", $patientID, $careGiverID, $bookingType, $startDate, $endDate->format('Y-m-d'), $totalAmount, $availabilityID);
@@ -88,7 +88,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['book_caregiver'])) {
             $stmt->close();
 
             $conn->commit();
-           
+
             $_SESSION['pending_caregiver_booking_id'] = $newBookingID;
             header("Location: payment.php");
             exit();
@@ -100,18 +100,26 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['book_caregiver'])) {
     }
 }
 
+// --- Prepare dropdown options for caregiver types ---
+$typeResult = $conn->query("SELECT DISTINCT careGiverType FROM caregiver");
+$caregiverTypes = [];
+while ($row = $typeResult->fetch_assoc()) {
+    $caregiverTypes[] = $row['careGiverType'];
+}
+
+// --- Fetch filter params ---
+$typeFilter = $_GET['type'] ?? '';
+$dateFilter = $_GET['date'] ?? '';
+
 // --- Fetch all Caregivers (with filtering) ---
 $baseQuery = "SELECT u.userID, u.Name, u.profilePhoto, c.careGiverType, c.certifications, c.dailyRate, c.weeklyRate, c.monthlyRate FROM users u JOIN caregiver c ON u.userID = c.careGiverID";
 $whereClauses = ["u.role = 'CareGiver'", "u.verification_status = 'Approved'"];
 $params = [];
 $types = "";
 
-$typeFilter = $_GET['type'] ?? '';
-$dateFilter = $_GET['date'] ?? '';
-
 if (!empty($typeFilter)) {
-    $whereClauses[] = "c.careGiverType LIKE ?";
-    $params[] = "%" . $typeFilter . "%";
+    $whereClauses[] = "c.careGiverType = ?";
+    $params[] = $typeFilter;
     $types .= "s";
 }
 if (!empty($dateFilter)) {
@@ -176,6 +184,7 @@ function generateCaregiverCards($caregivers) {
                 <a href="find_provider.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-calendar-plus w-5"></i><span>Book Appointment</span></a>
                 <a href="patientAppointments.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-calendar-days w-5"></i><span>My Appointments</span></a>
                 <a href="caregiverBooking.php" class="flex items-center space-x-3 px-4 py-3 bg-purple-100 text-dark-orchid rounded-lg"><i class="fa-solid fa-hands-holding-child w-5"></i><span>Caregiver Bookings</span></a>
+                <a href="my_bookings.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-regular fa-bookmark w-5"></i><span>My Caregiver Bookings</span></a>
                 <a href="upload_medical_history.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-file-medical w-5"></i><span>Medical History</span></a>
                 <a href="logout.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg mt-8"><i class="fa-solid fa-arrow-right-from-bracket w-5"></i><span>Logout</span></a>
             </nav>
@@ -191,13 +200,26 @@ function generateCaregiverCards($caregivers) {
 
             <div class="bg-white p-4 rounded-lg shadow-md mb-6">
                 <form method="GET" class="flex flex-wrap items-end gap-4">
-                    <div><label class="text-sm font-medium">Filter by Type</label><input type="text" name="type" value="<?php echo htmlspecialchars($typeFilter); ?>" placeholder="e.g., Nurse" class="w-full mt-1 p-2 border rounded-md"></div>
-                    <div><label class="text-sm font-medium">Available from Date</label><input type="date" name="date" value="<?php echo htmlspecialchars($dateFilter); ?>" class="w-full mt-1 p-2 border rounded-md"></div>
+                    <div>
+                        <label class="text-sm font-medium">Filter by Type</label>
+                        <select name="type" class="w-full mt-1 p-2 border rounded-md">
+                            <option value="">All Types</option>
+                            <?php foreach ($caregiverTypes as $type): ?>
+                                <option value="<?php echo htmlspecialchars($type); ?>" <?php if ($typeFilter === $type) echo 'selected'; ?>>
+                                    <?php echo htmlspecialchars($type); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-sm font-medium">Available from Date</label>
+                        <input type="date" name="date" value="<?php echo htmlspecialchars($dateFilter); ?>" class="w-full mt-1 p-2 border rounded-md">
+                    </div>
                     <button type="submit" class="px-4 py-2 bg-dark-orchid text-white rounded-md font-semibold">Filter</button>
                     <a href="caregiverBooking.php" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md">Clear</a>
                 </form>
             </div>
-           
+
             <div class="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"><?php echo generateCaregiverCards($caregivers); ?></div>
         </main>
     </div>
@@ -221,7 +243,7 @@ function generateCaregiverCards($caregivers) {
             try {
                 const response = await fetch(`get_caregiver_details.php?id=${caregiverId}`);
                 const data = await response.json();
-               
+
                 if (data.error) throw new Error(data.error);
 
                 let scheduleHtml = '<p class="text-center text-gray-500 py-4">No available slots found.</p>';

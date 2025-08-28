@@ -71,7 +71,7 @@ elseif (isset($_SESSION['pending_user_id'])) {
     
     $fee = 0;
     switch ($user['role']) {
-        case 'Patient': $fee = 100.00; break;
+        case 'Patient': $fee = 200.00; break;
         case 'CareGiver': $fee = 500.00; break;
         case 'Doctor':
         case 'Nutritionist': $fee = 1000.00; break;
