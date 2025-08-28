@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Aug 21, 2025 at 08:35 PM
+-- Generation Time: Aug 28, 2025 at 12:08 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -62,11 +62,16 @@ CREATE TABLE `appointment` (
 INSERT INTO `appointment` (`appointmentID`, `patientID`, `providerID`, `appointmentDate`, `status`, `consultation_link`, `scheduleID`, `notes`) VALUES
 (3, 30, 24, '2025-08-10 11:00:00', 'Completed', NULL, NULL, 'Consultation for minor skin rash. Prescription was provided.'),
 (4, 31, 27, '2025-08-18 17:30:00', 'Completed', 'https://meet.google.com/xyz-abc-pqr', NULL, 'Scheduled video consultation for blood pressure follow-up.'),
-(6, 30, 27, '2025-08-21 16:00:00', 'Canceled', NULL, 25, 'Patient canceled due to a personal emergency.'),
-(8, 31, 24, '2025-09-08 09:30:00', 'Scheduled', 'https://meet.google.com/cju-chtr-xgh', NULL, 'Fever and Cough .'),
+(8, 31, 24, '2025-09-08 09:30:00', 'Completed', 'https://meet.google.com/cju-chtr-xgh', NULL, 'Fever and Cough .'),
 (9, 30, 24, '2025-08-22 10:00:00', 'Scheduled', 'https://meet.google.com/lrz-mhto-wjp', NULL, 'Long term Cough and Cold.'),
 (10, 31, 24, '2025-08-23 17:00:00', 'Scheduled', 'https://meet.google.com/wgq-phvj-koi', NULL, 'Recently feeling chest pain.'),
-(11, 31, 24, '2025-08-23 17:00:00', 'Denied', NULL, NULL, 'Recently feeling chest pain.');
+(11, 31, 24, '2025-08-23 17:00:00', 'Denied', NULL, NULL, 'Recently feeling chest pain.'),
+(12, 30, 23, '2025-08-27 17:00:00', 'Scheduled', 'https://meet.google.com/cik-wxsz-clh', NULL, 'I am suffering from digestive issues. Need a good diet plan.'),
+(13, 31, 23, '2025-08-29 15:00:00', 'Scheduled', 'https://meet.google.com/vkl-engu-hoy', NULL, 'I have diabetes and heart issues. Need to follow a good food chart.'),
+(14, 31, 23, '2025-08-30 14:00:00', 'Requested', NULL, NULL, 'I am a cancer patient. Need a good diet plan and food chart.'),
+(16, 30, 24, '2025-08-28 04:00:00', 'Scheduled', NULL, 4, ''),
+(17, 30, 23, '2025-08-27 15:30:00', 'Scheduled', NULL, NULL, ''),
+(18, 30, 23, '2025-09-04 15:00:00', 'Scheduled', NULL, 31, '');
 
 -- --------------------------------------------------------
 
@@ -92,7 +97,8 @@ CREATE TABLE `caregiver` (
 
 INSERT INTO `caregiver` (`careGiverID`, `careGiverType`, `certifications`, `dailyRate`, `weeklyRate`, `monthlyRate`, `nidNumber`, `nidCopyURL`, `certificationURL`) VALUES
 (25, 'Nurse', 'register RN', 1000.00, 6000.00, 30000.00, '2131231321', NULL, NULL),
-(32, 'Physiotherapist', 'Cardiovascular and Pulmonary Clinical Specialist', 1500.00, 10000.00, 40000.00, '6456363456', NULL, NULL);
+(32, 'Physiotherapist', 'Cardiovascular and Pulmonary Clinical Specialist', 1500.00, 10000.00, 40000.00, '6456363456', NULL, NULL),
+(45, 'Nurse', 'register RN', 1000.00, 6000.00, 30000.00, '2132312312', '0', 'uploads/caregiver_documents/1756322396_Screenshot_2023_12_24_202539.png');
 
 -- --------------------------------------------------------
 
@@ -144,8 +150,7 @@ INSERT INTO `caregiver_availability` (`availabilityID`, `careGiverID`, `bookingT
 (9, 32, 'Weekly', '2025-08-18', 'Available'),
 (13, 25, 'Daily', '2025-10-09', 'Available'),
 (14, 32, 'Monthly', '2025-08-28', 'Available'),
-(15, 32, 'Daily', '2025-10-01', 'Available'),
-(16, 25, 'Daily', '2025-08-21', 'Available');
+(15, 32, 'Daily', '2025-10-01', 'Available');
 
 -- --------------------------------------------------------
 
@@ -210,8 +215,9 @@ CREATE TABLE `doctor` (
 --
 
 INSERT INTO `doctor` (`doctorID`, `specialty`, `licNo`, `yearsOfExp`, `consultationFees`, `nidNumber`, `bmdcRegistrationNumber`, `licenseExpiryDate`, `hospital`, `department`, `medicalSchool`, `nidCopyURL`, `bmdcCertURL`, `medicalLicenseURL`) VALUES
-(24, 'Cardiology', '123-W2', 5, 500.00, '12123131312', '14324234', '2036-01-12', 'Exim Bank hospital', 'cardiology deartment', 'Dhaka Medical', NULL, NULL, NULL),
-(27, 'General Medicine', '3421342', 15, 800.00, '2323123', '3423423', '2025-08-13', 'Islamic Hospital', 'Medicine', 'Dhaka Medical', NULL, NULL, NULL);
+(24, 'Cardiology', '123-W2', 5, 600.00, '12123131312', '14324234', '2036-01-12', 'Exim Bank hospital', 'cardiology deartment', 'Dhaka Medical', NULL, NULL, NULL),
+(27, 'General Medicine', '3421342', 15, 800.00, '2323123', '3423423', '2025-08-13', 'Islamic Hospital', 'Medicine', 'Dhaka Medical', NULL, NULL, NULL),
+(34, 'Pediatrics', '123-W212', 3, 600.00, '12123131312', '3213231', '2030-01-27', ' Ibn Sina Hospital', 'Pediatrics Department', 'Gono Shastho Medical Collage', 'uploads/doctor_documents/1756313497_WBS_Diagram.png', 'uploads/doctor_documents/1756313497_Screenshot_2025_08_25_202937.png', 'uploads/doctor_documents/1756313497_Screenshot_2024_01_31_014215.png');
 
 -- --------------------------------------------------------
 
@@ -272,7 +278,16 @@ CREATE TABLE `notification` (
 --
 
 INSERT INTO `notification` (`notificationID`, `userID`, `type`, `message`, `sentDate`, `status`) VALUES
-(1, 32, 'Booking Canceled', 'Your booking with patient Begum Rukaiya starting on Oct 1, 2025 has been canceled.', '2025-08-18', 'Read');
+(1, 32, 'Booking Canceled', 'Your booking with patient Begum Rukaiya starting on Oct 1, 2025 has been canceled.', '2025-08-18', 'Read'),
+(2, 24, 'Account Approval', 'Congratulations! Your account has been verified and approved by an administrator. You now have full access to your dashboard.', '2025-08-27', 'Unread'),
+(3, 27, 'Account Approval', 'Congratulations! Your account has been verified and approved by an administrator. You now have full access to your dashboard.', '2025-08-27', 'Unread'),
+(4, 23, 'Account Approval', 'Congratulations! Your account has been verified and approved by an administrator. You now have full access to your dashboard.', '2025-08-27', 'Unread'),
+(5, 34, 'Account Approval', 'Congratulations! Your account has been verified and approved by an administrator. You now have full access to your dashboard.', '2025-08-27', 'Unread'),
+(6, 32, 'Account Approval', 'Congratulations! Your account has been verified and approved by an administrator. You now have full access to your dashboard.', '2025-08-27', 'Unread'),
+(7, 42, 'Account Approval', 'Congratulations! Your account has been verified and approved by an administrator. You now have full access to your dashboard.', '2025-08-28', 'Unread'),
+(9, 45, 'Account Rejected', 'We regret to inform you that your application has been rejected. Please contact support for more information.', '2025-08-28', 'Unread'),
+(10, 25, 'Account Approval', 'Congratulations! Your account has been verified and approved by an administrator. You now have full access to your dashboard.', '2025-08-28', 'Unread'),
+(11, 25, 'Account Approval', 'Congratulations! Your account has been verified and approved by an administrator. You now have full access to your dashboard.', '2025-08-28', 'Unread');
 
 -- --------------------------------------------------------
 
@@ -295,7 +310,11 @@ CREATE TABLE `nutritionist` (
 --
 
 INSERT INTO `nutritionist` (`nutritionistID`, `specialty`, `yearsOfExp`, `consultationFees`, `nidNumber`, `degree`, `nidCopyURL`) VALUES
-(23, 'Public Health Nutrition', 7, 700.00, '13442323', '0', NULL);
+(23, 'Public Health Nutrition', 7, 700.00, '13442323', 'Diploma in nutrition major', NULL),
+(38, 'Pediatric Nutrition', 5, 500.00, '13412412312', '0', NULL),
+(42, 'Clinical Nutrition', 2, 500.00, '32241411121`', '0', NULL),
+(43, 'Clinical Nutrition', 1, 500.00, '4234143211', '0', NULL),
+(47, 'Weight Management', 2, 600.00, '1212313131', 'MHP ', 'uploads/docs/nid_nutritionist_47_1756324510_Screenshot 2023-12-24 210430.png');
 
 -- --------------------------------------------------------
 
@@ -317,7 +336,9 @@ CREATE TABLE `patient` (
 
 INSERT INTO `patient` (`patientID`, `age`, `height`, `weight`, `gender`) VALUES
 (30, 24, 160.00, 65.00, 'Female'),
-(31, 58, 180.00, 70.00, 'Male');
+(31, 58, 180.00, 70.00, 'Male'),
+(33, 56, 160.00, 70.00, 'Male'),
+(37, 65, 165.00, 70.00, 'Male');
 
 -- --------------------------------------------------------
 
@@ -366,7 +387,8 @@ CREATE TABLE `prescription` (
 --
 
 INSERT INTO `prescription` (`prescriptionID`, `appointmentID`, `doctorID`, `medicineNames-dosages`, `instructions`, `date`) VALUES
-(2, 4, 27, 'Feza', 'Aa', '2025-08-16');
+(2, 4, 27, 'Feza', 'Aa', '2025-08-16'),
+(5, 8, 24, 'Ecospring50g (1+0+1) --- continue\r\nDoxazosin (0+0+1) --- 1 Month', 'Take Rest.\r\nAvoid Red Meat.', '2025-08-24');
 
 -- --------------------------------------------------------
 
@@ -388,10 +410,11 @@ CREATE TABLE `schedule` (
 --
 
 INSERT INTO `schedule` (`scheduleID`, `providerID`, `availableDate`, `startTime`, `endTime`, `status`) VALUES
-(4, 24, '2025-08-28', '03:57:00', '04:58:00', 'Available'),
-(5, 24, '2025-08-28', '03:57:00', '04:58:00', 'Rescheduled'),
-(25, 27, '2025-08-21', '04:00:00', '19:00:00', 'Available'),
-(26, 24, '2025-08-24', '07:00:00', '21:00:00', 'Available');
+(4, 24, '2025-08-28', '04:00:00', '05:00:00', 'Booked'),
+(5, 24, '2025-08-30', '04:00:00', '08:00:00', 'Rescheduled'),
+(27, 23, '2025-09-01', '18:00:00', '21:00:00', 'Booked'),
+(28, 23, '2025-08-27', '16:00:00', '20:00:00', 'Rescheduled'),
+(31, 23, '2025-09-04', '15:00:00', '18:00:00', 'Booked');
 
 -- --------------------------------------------------------
 
@@ -403,11 +426,36 @@ CREATE TABLE `transaction` (
   `transactionID` int(11) NOT NULL,
   `appointmentID` int(11) DEFAULT NULL,
   `careProviderBookingID` int(11) DEFAULT NULL,
+  `userID` int(11) DEFAULT NULL,
   `amount` decimal(10,2) DEFAULT NULL,
   `transactionType` varchar(20) DEFAULT NULL,
   `status` varchar(20) DEFAULT NULL,
-  `timestamp` datetime DEFAULT NULL
-) ;
+  `timestamp` datetime DEFAULT NULL,
+  `gatewayTransactionID` varchar(255) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `transaction`
+--
+
+INSERT INTO `transaction` (`transactionID`, `appointmentID`, `careProviderBookingID`, `userID`, `amount`, `transactionType`, `status`, `timestamp`, `gatewayTransactionID`) VALUES
+(5, NULL, NULL, NULL, 1000.00, 'Registration Fee', 'Completed', '2025-08-27 21:27:26', 'SSL_TRANS_6EDA7281CA8059793E59'),
+(6, NULL, NULL, 33, 400.00, 'Registration Fee', 'Completed', '2025-08-27 21:35:58', 'SSL_TRANS_CFA6EEFAD970D4CAF3A1'),
+(7, NULL, NULL, 24, 1000.00, 'Registration Fee', 'Completed', '2025-06-01 21:41:37', 'SSL_TRANS_72FD7039C0878EE18CA8'),
+(8, NULL, NULL, 27, 1000.00, 'Registration Fee', 'Completed', '2025-07-01 22:02:34', 'SSL_TRANS_7B3641FEFE4BCAA9BCF3'),
+(9, NULL, NULL, 23, 1000.00, 'Registration Fee', 'Completed', '2025-08-27 22:03:56', 'SSL_TRANS_923BB7A1AF4E5C56C29D'),
+(10, NULL, NULL, 31, 200.00, 'Registration Fee', 'Completed', '2025-07-01 22:46:09', 'SSL_TRANS_C18D656B6AEA58FF7724'),
+(11, NULL, NULL, 34, 1000.00, 'Registration Fee', 'Completed', '2025-05-01 22:52:44', 'SSL_TRANS_D6DDF159F39EC84F3D7F'),
+(12, NULL, NULL, 32, 500.00, 'Registration Fee', 'Completed', '2025-07-01 22:55:50', 'SSL_TRANS_85ED0117DE1C2D2BA3F8'),
+(13, NULL, NULL, 25, 500.00, 'Registration Fee', 'Completed', '2025-07-01 22:57:33', 'SSL_TRANS_D182E49A661C161BBB99'),
+(14, NULL, NULL, 30, 200.00, 'Registration Fee', 'Completed', '2025-08-27 23:06:40', 'SSL_TRANS_7BBC65DBE0E2125ACD76'),
+(15, 18, NULL, NULL, 700.00, 'Appointment Fee', 'Completed', '2025-08-27 23:48:02', 'SSL_TRANS_65568E01CB3C3B997B74'),
+(16, NULL, NULL, 42, 1000.00, 'Registration Fee', 'Completed', '2025-08-28 00:16:09', 'SSL_TRANS_2C64B03CEFAEE180AE52'),
+(17, NULL, NULL, 43, 1000.00, 'Registration Fee', 'Completed', '2025-08-28 01:01:48', 'SSL_TRANS_18B979F00DD5147929CD'),
+(19, NULL, NULL, 36, 1000.00, 'Registration Fee', 'Completed', '2025-08-28 01:17:40', 'SSL_TRANS_B9F861D4A15651687CEA'),
+(20, NULL, NULL, 45, 500.00, 'Registration Fee', 'Completed', '2025-08-28 01:20:31', 'SSL_TRANS_E0EAC9C86043DE5BEAF4'),
+(21, NULL, NULL, 35, 1000.00, 'Registration Fee', 'Completed', '2025-08-28 01:26:27', 'SSL_TRANS_C5DA312212217137C055'),
+(23, NULL, NULL, 47, 1000.00, 'Registration Fee', 'Completed', '2025-08-28 01:55:24', 'SSL_TRANS_3B019EA2D35963F2F964');
 
 -- --------------------------------------------------------
 
@@ -422,23 +470,36 @@ CREATE TABLE `users` (
   `Name` varchar(100) NOT NULL,
   `contactNo` varchar(20) DEFAULT NULL,
   `role` enum('Patient','Doctor','Nutritionist','CareGiver','Admin') NOT NULL,
-  `profilePhoto` varchar(255) DEFAULT NULL
+  `profilePhoto` varchar(255) DEFAULT NULL,
+  `registrationDate` datetime NOT NULL DEFAULT current_timestamp(),
+  `payment_status` enum('Unpaid','Paid','Failed') NOT NULL DEFAULT 'Unpaid',
+  `verification_status` enum('Pending','Approved','Rejected') NOT NULL DEFAULT 'Pending'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `users`
 --
 
-INSERT INTO `users` (`userID`, `email`, `password`, `Name`, `contactNo`, `role`, `profilePhoto`) VALUES
-(23, 'n@gmail.com', '$2y$10$gx.JzXM2U1l.PSDImfxUQu./i56vUIKX4CWO8WKv5p6rQ6Z7oi/da', 'Sadia Ahmed', '01222222', 'Nutritionist', 'uploads/1755017853_474554607_2669300239933381_4912127688215262215_n.jpg'),
-(24, 'd@gmail.com', '$2y$10$en0WF2jyoScW2QrGzwuDyOTra8LLfbq98ptnmi2Rht2ttqS9ZG6Bi', 'Maliha Epsy', '08991822112', 'Doctor', 'uploads/1755018046_IMG_20210929_133222.jpg'),
-(25, 'c@gmail.com', '$2y$10$u0cydwtMJwG/M6i4/lTdwuevrKUu5zvafVW9gw.fCTUYWMjtvkSNe', 'Tasdik Ahmed', '134124324', 'CareGiver', 'uploads/profilePhoto_25_1755499368.png'),
-(26, 'a@gmail.com', '$2y$10$9WnNhjzz9y7jerTdcNiCme9vPjOX3ooDpWhcvA8ZMBe/un2.oKB.C', 'Jon Snow', '0131412341', 'Admin', 'uploads/1755018679_BMDC.png'),
-(27, 'dipu@gmail.com', '$2y$10$41l7O3zjGo0FeP84WVSZFu9zscb5Hd.aexzi4/d2vxYOBOC3.q8tC', 'Tawfiq Dipu', '01222222', 'Doctor', 'uploads/profile_27_1755297453.webp'),
-(28, 'ra@gmail.com', '$2y$10$13Y0yWZ0no2rpIHNArpSqunErvniOppn4qHleSQU1OaeFOGoiF.vC', 'Rakib', '23123423', 'Doctor', NULL),
-(30, 'p@gmail.com', '$2y$10$XeLwnSVMB5m27Fiu2l0h5urNC.OzlgkrT5k1yQA3IeG4P8/E1c5Pi', 'Begum Rukaiya', '01231234231', 'Patient', NULL),
-(31, 'jo@gmail.com', '$2y$10$9njCOMXXwcHmZ11ff3LLyeeP4ECCT2XEJXyWTdBvD4gwmp0DQ5YVe', 'Jolil Mia', '0189288922', 'Patient', 'uploads/1755293488_man.webp'),
-(32, 'shafi@gmail.com', '$2y$10$6GcxmY4kphlwZURTrd65sunVD2f9/ArgsSynRRwTuhvr23GJ0InC2', 'Shafikur Rahman', '017878788738', 'CareGiver', NULL);
+INSERT INTO `users` (`userID`, `email`, `password`, `Name`, `contactNo`, `role`, `profilePhoto`, `registrationDate`, `payment_status`, `verification_status`) VALUES
+(23, 'n@gmail.com', '$2y$10$gx.JzXM2U1l.PSDImfxUQu./i56vUIKX4CWO8WKv5p6rQ6Z7oi/da', 'Sadia Ahmed', '01878152006', 'Nutritionist', 'uploads/1755017853_474554607_2669300239933381_4912127688215262215_n.jpg', '2025-07-01 22:29:44', 'Paid', 'Approved'),
+(24, 'd@gmail.com', '$2y$10$en0WF2jyoScW2QrGzwuDyOTra8LLfbq98ptnmi2Rht2ttqS9ZG6Bi', 'Maliha Epsy', '01899182211', 'Doctor', 'uploads/1755018046_IMG_20210929_133222.jpg', '2025-06-01 22:29:44', 'Paid', 'Approved'),
+(25, 'c@gmail.com', '$2y$10$u0cydwtMJwG/M6i4/lTdwuevrKUu5zvafVW9gw.fCTUYWMjtvkSNe', 'Tasdik Ahmed', '134124324', 'CareGiver', 'uploads/profilePhoto_25_1755499368.png', '2025-08-27 22:29:44', 'Paid', 'Approved'),
+(26, 'a@gmail.com', '$2y$10$9WnNhjzz9y7jerTdcNiCme9vPjOX3ooDpWhcvA8ZMBe/un2.oKB.C', 'Jon Snow', '0131412341', 'Admin', 'uploads/1755018679_BMDC.png', '2025-08-27 22:29:44', 'Paid', 'Approved'),
+(27, 'dipu@gmail.com', '$2y$10$41l7O3zjGo0FeP84WVSZFu9zscb5Hd.aexzi4/d2vxYOBOC3.q8tC', 'Tawfiq Dipu', '01222222', 'Doctor', 'uploads/profile_27_1755297453.webp', '2025-07-01 22:29:44', 'Paid', 'Approved'),
+(28, 'ra@gmail.com', '$2y$10$13Y0yWZ0no2rpIHNArpSqunErvniOppn4qHleSQU1OaeFOGoiF.vC', 'Rakib', '0123123423', 'Doctor', NULL, '2025-08-27 22:29:44', 'Unpaid', 'Pending'),
+(30, 'p@gmail.com', '$2y$10$XeLwnSVMB5m27Fiu2l0h5urNC.OzlgkrT5k1yQA3IeG4P8/E1c5Pi', 'Begum Rukaiya', '01231234231', 'Patient', NULL, '2025-08-27 22:29:44', 'Paid', 'Approved'),
+(31, 'jo@gmail.com', '$2y$10$9njCOMXXwcHmZ11ff3LLyeeP4ECCT2XEJXyWTdBvD4gwmp0DQ5YVe', 'Jolil Mia', '0189288922', 'Patient', 'uploads/1755293488_man.webp', '2025-08-27 22:29:44', 'Paid', 'Approved'),
+(32, 'shafi@gmail.com', '$2y$10$6GcxmY4kphlwZURTrd65sunVD2f9/ArgsSynRRwTuhvr23GJ0InC2', 'Shafikur Rahman', '017878788738', 'CareGiver', NULL, '2025-07-01 22:29:44', 'Paid', 'Approved'),
+(33, 'sabiha@gmail.com', '$2y$10$Lo81HBNCJ38LsVBwq/I02.hoxFSbuIAX0suUcv8A49348SKn1bQ.u', 'Sabiha Rassu', '01879172003', 'Patient', NULL, '2025-08-27 22:29:44', 'Paid', 'Approved'),
+(34, 'sreya@gmail.com', '$2y$10$ipfRhdWql3CmxqdLK42W1uq2hZgvShu10H3cUgJ0U1iVZJAizPjQm', 'Sreya Rahman', '018918718818', 'Doctor', NULL, '2025-05-01 22:29:44', 'Paid', 'Approved'),
+(35, 'atik@gmail.com', '$2y$10$JrkZX54cZoA1lBHrn2cFNub9jk8ZY3udWtWOIzuBkvjETHMcEtfk.', 'Atik Rahman', '01899718818', 'Nutritionist', 'uploads/1756045449_OIP.webp', '2025-08-27 22:29:44', 'Paid', 'Pending'),
+(36, 'ajijul@gmail.com', '$2y$10$2nT/8FV1RyPsL5zy38fufeRxyLRPvwMADzu7BMXD4/fNZDzwECVHq', 'Ajijul Haque', '01799718818', 'Doctor', 'uploads/1756045511_OIP.webp', '2025-08-27 22:29:44', 'Paid', 'Pending'),
+(37, 'rafique@gmail.com', '$2y$10$w1jfZuz.hCP9eHi9FA8DjOkEpf5TPTBrrgwUPAi9WSzW4ixhJRyTm', 'Rafique Ahmed', '01601911198', 'Patient', NULL, '2025-08-27 22:29:44', 'Unpaid', 'Approved'),
+(38, 'samia@gmail.com', '$2y$10$2XENBU6fcdFJK6Xu1RSeEeeiuurYnvpZ6pRY8rWWIhj2BzRWJEj72', 'Sadia Ahmed', '01222222112', 'Nutritionist', NULL, '2025-08-27 22:29:44', 'Unpaid', 'Pending'),
+(42, 'salma@gmail.com', '$2y$10$Uic2EA9r1EEX.NkNIb6QOudlMxnnfaTt0XddOdGQvX9w.PK8YlKcC', 'Salma Khatun', '012222221111', 'Nutritionist', NULL, '2025-08-27 22:29:44', 'Paid', 'Approved'),
+(43, 'sharmin@gmail.com', '$2y$10$TGeQGbHzxXG/5j1p4F5bHuO3PE5GOAa/a2u7B.W4HJWwafePzrdlG', 'Sharmin', '313123', 'Nutritionist', NULL, '2025-08-28 01:00:31', 'Paid', 'Pending'),
+(45, 'morium@gmail.com', '$2y$10$E2ed.lk8xuTQazsKZVJi0eJadyzJ7oitNXSsKfBTUSLmlNfHc.J/m', 'Morium Anika', '01879172008', 'CareGiver', NULL, '2025-08-28 01:19:09', 'Paid', 'Rejected'),
+(47, 'sama@gmail.com', '$2y$10$gEmMN/QNQAjlsnxjxwISbuGI503pROVbat.HN0FB2bvnWKPfSBuLu', 'Sama Jahan', '01799718812', 'Nutritionist', NULL, '2025-08-28 01:36:21', 'Paid', 'Pending');
 
 --
 -- Indexes for dumped tables
@@ -567,7 +628,8 @@ ALTER TABLE `schedule`
 ALTER TABLE `transaction`
   ADD PRIMARY KEY (`transactionID`),
   ADD KEY `appointmentID` (`appointmentID`),
-  ADD KEY `careGiverBookingID` (`careProviderBookingID`);
+  ADD KEY `careGiverBookingID` (`careProviderBookingID`),
+  ADD KEY `fk_transaction_user` (`userID`);
 
 --
 -- Indexes for table `users`
@@ -584,7 +646,7 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `appointment`
 --
 ALTER TABLE `appointment`
-  MODIFY `appointmentID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `appointmentID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
 
 --
 -- AUTO_INCREMENT for table `caregiverbooking`
@@ -626,7 +688,7 @@ ALTER TABLE `medicaldocuments`
 -- AUTO_INCREMENT for table `notification`
 --
 ALTER TABLE `notification`
-  MODIFY `notificationID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `notificationID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 
 --
 -- AUTO_INCREMENT for table `patienthistory`
@@ -638,25 +700,25 @@ ALTER TABLE `patienthistory`
 -- AUTO_INCREMENT for table `prescription`
 --
 ALTER TABLE `prescription`
-  MODIFY `prescriptionID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `prescriptionID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT for table `schedule`
 --
 ALTER TABLE `schedule`
-  MODIFY `scheduleID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=27;
+  MODIFY `scheduleID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=33;
 
 --
 -- AUTO_INCREMENT for table `transaction`
 --
 ALTER TABLE `transaction`
-  MODIFY `transactionID` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `transactionID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=24;
 
 --
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `userID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=33;
+  MODIFY `userID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=48;
 
 --
 -- Constraints for dumped tables
@@ -772,6 +834,7 @@ ALTER TABLE `schedule`
 -- Constraints for table `transaction`
 --
 ALTER TABLE `transaction`
+  ADD CONSTRAINT `fk_transaction_user` FOREIGN KEY (`userID`) REFERENCES `users` (`userID`) ON DELETE SET NULL,
   ADD CONSTRAINT `transaction_ibfk_1` FOREIGN KEY (`appointmentID`) REFERENCES `appointment` (`appointmentID`) ON DELETE CASCADE,
   ADD CONSTRAINT `transaction_ibfk_2` FOREIGN KEY (`careProviderBookingID`) REFERENCES `caregiverbooking` (`bookingID`) ON DELETE CASCADE;
 COMMIT;
