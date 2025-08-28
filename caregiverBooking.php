@@ -3,342 +3,285 @@ session_start();
 $conn = require_once 'config.php';
 date_default_timezone_set('Asia/Dhaka');
 
-// Protect this page: allow only logged-in Patients
+// Protect this page
 if (!isset($_SESSION['userID']) || $_SESSION['role'] !== 'Patient') {
     header("Location: login.php");
     exit();
 }
+
 $patientID = $_SESSION['userID'];
 $userName = $_SESSION['Name'];
 $userAvatar = strtoupper(substr($userName, 0, 2));
 $successMsg = "";
 $errorMsg = "";
 
-// --- API Endpoint: Fetch available slots for a specific caregiver ---
-if (isset($_GET['get_slots_for'])) {
-    $careGiverID = (int)$_GET['get_slots_for'];
-    $stmt = $conn->prepare("SELECT * FROM caregiver_availability WHERE careGiverID = ? AND status = 'Available' AND startDate >= CURDATE() ORDER BY startDate ASC");
-    $stmt->bind_param("i", $careGiverID);
-    $stmt->execute();
-    $slots = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    header('Content-Type: application/json');
-    echo json_encode($slots);
-    exit();
-}
-
 // --- Handle Booking Submission ---
-if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['book_availability_id'])) {
-    $availabilityID = (int)$_POST['book_availability_id'];
-    
-    $conn->begin_transaction();
-    try {
-        $schQuery = "SELECT * FROM caregiver_availability WHERE availabilityID = ? AND status = 'Available' FOR UPDATE";
-        $schStmt = $conn->prepare($schQuery);
-        $schStmt->bind_param("i", $availabilityID);
-        $schStmt->execute();
-        $slotDetails = $schStmt->get_result()->fetch_assoc();
+if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['book_caregiver'])) {
+   
+    // Check if an availability slot was selected first
+    if (!isset($_POST['availabilityID'])) {
+        $errorMsg = "Please select an available time slot before booking.";
+    } else {
+        $careGiverID = (int)$_POST['careGiverID'];
+        $availabilityID = (int)$_POST['availabilityID'];
+        $notes = trim($_POST['notes']);
 
-        if ($slotDetails) {
-            $careGiverID = $slotDetails['careGiverID'];
+        $conn->begin_transaction();
+        try {
+            $stmt = $conn->prepare("SELECT * FROM caregiver_availability WHERE availabilityID = ? AND status = 'Available' FOR UPDATE");
+            $stmt->bind_param("i", $availabilityID);
+            $stmt->execute();
+            $result = $stmt->get_result();
+           
+            if ($result->num_rows === 0) {
+                throw new Exception("This time slot is no longer available. Please select another.");
+            }
+            $slotDetails = $result->fetch_assoc();
+            $stmt->close();
+
+            // Calculate end date and amount
+            $bookingType = $slotDetails['bookingType'];
+            $startDate = $slotDetails['startDate'];
+            $endDate = new DateTime($startDate);
+            
+            // Get caregiver rates
             $rateQuery = $conn->prepare("SELECT dailyRate, weeklyRate, monthlyRate FROM caregiver WHERE careGiverID = ?");
             $rateQuery->bind_param("i", $careGiverID);
             $rateQuery->execute();
             $rates = $rateQuery->get_result()->fetch_assoc();
+            $rateQuery->close();
             
-            $bookingType = $slotDetails['bookingType'];
-            $startDate = $slotDetails['startDate'];
-            $endDate = new DateTime($startDate);
             $totalAmount = 0;
+            if ($bookingType == 'Daily') { 
+                $endDate->modify('+1 day'); 
+                $totalAmount = $rates['dailyRate']; 
+            }
+            if ($bookingType == 'Weekly') { 
+                $endDate->modify('+7 days'); 
+                $totalAmount = $rates['weeklyRate']; 
+            }
+            if ($bookingType == 'Monthly') { 
+                $endDate->modify('+1 month'); 
+                $totalAmount = $rates['monthlyRate']; 
+            }
 
-            if ($bookingType == 'Daily') { $endDate->modify('+1 day'); $totalAmount = $rates['dailyRate']; }
-            if ($bookingType == 'Weekly') { $endDate->modify('+7 days'); $totalAmount = $rates['weeklyRate']; }
-            if ($bookingType == 'Monthly') { $endDate->modify('+1 month'); $totalAmount = $rates['monthlyRate']; }
-
-            // (NEW) Validation: Check if the PATIENT has a conflicting booking
-            $patientConflictCheck = $conn->prepare("SELECT bookingID FROM caregiverbooking WHERE patientID = ? AND status IN ('Scheduled', 'Active') AND (startDate < ? AND endDate > ?)");
-            $patientConflictCheck->bind_param("iss", $patientID, $endDate->format('Y-m-d'), $startDate);
-            $patientConflictCheck->execute();
-            if ($patientConflictCheck->get_result()->num_rows > 0) {
+            // Check for conflicts
+            $conflictCheck = $conn->prepare("SELECT bookingID FROM caregiverbooking WHERE patientID = ? AND status IN ('Scheduled', 'Active') AND (startDate < ? AND endDate > ?)");
+            $conflictCheck->bind_param("iss", $patientID, $endDate->format('Y-m-d'), $startDate);
+            $conflictCheck->execute();
+            if ($conflictCheck->get_result()->num_rows > 0) {
                 throw new Exception("You already have another caregiver booking scheduled during this time period.");
             }
-            $patientConflictCheck->close();
+            $conflictCheck->close();
 
-            $sql = "INSERT INTO caregiverbooking (patientID, careGiverID, bookingType, startDate, endDate, totalAmount, status, availabilityID) VALUES (?, ?, ?, ?, ?, ?, 'Scheduled', ?)";
-            $stmt = $conn->prepare($sql);
+            // Update availability status to Booked
+            $stmt = $conn->prepare("UPDATE caregiver_availability SET status = 'Booked' WHERE availabilityID = ?");
+            $stmt->bind_param("i", $availabilityID);
+            $stmt->execute();
+            $stmt->close();
+           
+            // Create booking record
+            $stmt = $conn->prepare("INSERT INTO caregiverbooking (patientID, careGiverID, bookingType, startDate, endDate, totalAmount, status, availabilityID) VALUES (?, ?, ?, ?, ?, ?, 'Scheduled', ?)");
             $stmt->bind_param("iisssdi", $patientID, $careGiverID, $bookingType, $startDate, $endDate->format('Y-m-d'), $totalAmount, $availabilityID);
             $stmt->execute();
-            
-            $updateSql = "UPDATE caregiver_availability SET status = 'Booked' WHERE availabilityID = ?";
-            $updateStmt = $conn->prepare($updateSql);
-            $updateStmt->bind_param("i", $availabilityID);
-            $updateStmt->execute();
+            $newBookingID = $stmt->insert_id;
+            $stmt->close();
 
             $conn->commit();
-            $successMsg = "Caregiver booked successfully from " . date('d M, Y', strtotime($startDate)) . "!";
-        } else {
-            throw new Exception("This slot is no longer available.");
+           
+            $_SESSION['pending_caregiver_booking_id'] = $newBookingID;
+            header("Location: payment.php");
+            exit();
+
+        } catch (Exception $e) {
+            $conn->rollback();
+            $errorMsg = $e->getMessage();
         }
-    } catch (Exception $e) {
-        $conn->rollback();
-        $errorMsg = "Booking failed: " . $e->getMessage();
     }
 }
 
-// --- Fetch ALL caregiver data ---
-$caregivers = $conn->query("SELECT u.userID, u.Name, u.profilePhoto, c.* FROM users u JOIN caregiver c ON u.userID = c.careGiverID WHERE u.role = 'CareGiver'")->fetch_all(MYSQLI_ASSOC);
-$availabilities = $conn->query("SELECT * FROM caregiver_availability WHERE status = 'Available' AND startDate >= CURDATE()")->fetch_all(MYSQLI_ASSOC);
+// --- Fetch all Caregivers (with filtering) ---
+$baseQuery = "SELECT u.userID, u.Name, u.profilePhoto, c.careGiverType, c.certifications, c.dailyRate, c.weeklyRate, c.monthlyRate FROM users u JOIN caregiver c ON u.userID = c.careGiverID";
+$whereClauses = ["u.role = 'CareGiver'", "u.verification_status = 'Approved'"];
+$params = [];
+$types = "";
 
-// --- Prepare data for filters ---
-$caregiverTypes = array_unique(array_column($caregivers, 'careGiverType'));
+$typeFilter = $_GET['type'] ?? '';
+$dateFilter = $_GET['date'] ?? '';
 
-// --- (CORRECTED) Group availabilities by caregiver BEFORE the loop to fix the error ---
-$availabilitiesByCareGiver = [];
-foreach ($availabilities as $avail) {
-    $availabilitiesByCareGiver[$avail['careGiverID']][] = $avail;
+if (!empty($typeFilter)) {
+    $whereClauses[] = "c.careGiverType LIKE ?";
+    $params[] = "%" . $typeFilter . "%";
+    $types .= "s";
+}
+if (!empty($dateFilter)) {
+    $baseQuery .= " JOIN caregiver_availability ca ON u.userID = ca.careGiverID ";
+    $whereClauses[] = "ca.startDate = ? AND ca.status = 'Available'";
+    $params[] = $dateFilter;
+    $types .= "s";
 }
 
-$conn->close();
+$query = $baseQuery . " WHERE " . implode(" AND ", $whereClauses) . " GROUP BY u.userID ORDER BY u.Name ASC";
+$stmt = $conn->prepare($query);
+if (!empty($params)) {
+    $stmt->bind_param($types, ...$params);
+}
+$stmt->execute();
+$caregivers = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+function generateCaregiverCards($caregivers) {
+    if (empty($caregivers)) { return '<p class="text-center text-gray-500 py-10 col-span-full">No caregivers found matching your criteria.</p>'; }
+    $html = '';
+    foreach($caregivers as $caregiver) {
+        $html .= '<div class="caregiver-card bg-white p-5 rounded-lg shadow-md border flex flex-col">';
+        $html .= '<div class="flex items-center space-x-4 mb-4">';
+        if(!empty($caregiver['profilePhoto'])) {
+            $html .= '<img src="'.htmlspecialchars($caregiver['profilePhoto']).'" class="w-16 h-16 rounded-full object-cover">';
+        } else {
+            $html .= '<div class="w-16 h-16 rounded-full bg-dark-orchid text-white flex items-center justify-center font-bold text-2xl">'.htmlspecialchars(strtoupper(substr($caregiver['Name'], 0, 2))).'</div>';
+        }
+        $html .= '<div><h3 class="text-lg font-bold text-slate-800">'.htmlspecialchars($caregiver['Name']).'</h3><p class="text-sm text-gray-500">'.htmlspecialchars($caregiver['careGiverType']).'</p></div>';
+        $html .= '</div>';
+        $html .= '<div class="text-sm space-y-2 flex-grow"><p class="text-gray-700"><i class="fa-solid fa-award w-5 text-gray-400 mr-1"></i><span class="font-semibold">Qualifications:</span> '.htmlspecialchars($caregiver['certifications'] ?? 'N/A').'</p>';
+        $html .= '<p class="text-gray-700"><i class="fa-solid fa-money-bill-wave w-5 text-gray-400 mr-1"></i><span class="font-semibold">Daily Rate:</span> ৳'.htmlspecialchars(number_format($caregiver['dailyRate'] ?? 0, 2)).'</p></div>';
+        $html .= '<button onclick="viewCaregiverDetails('.$caregiver['userID'].')" class="w-full mt-4 py-2 px-4 bg-dark-orchid text-white rounded-md font-semibold hover:bg-purple-700 transition">View Availability & Book</button>';
+        $html .= '</div>';
+    }
+    return $html;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Book a CareGiver - CarePlus</title>
+    <title>Book Caregiver - CarePlus</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
-    <style> body { font-family: 'Inter', sans-serif; } .bg-dark-orchid { background-color: #9932CC; } </style>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .bg-dark-orchid { background-color: #9932CC; }
+        .text-dark-orchid { color: #9932CC; }
+        .caregiver-card { transition: transform 0.2s, box-shadow 0.2s; }
+        .caregiver-card:hover { transform: translateY(-5px); box-shadow: 0 10px 15px -3px rgba(153,50,204,0.1); }
+    </style>
 </head>
-<body class="bg-purple-50">
-     <div class="flex min-h-screen">
+<body class="bg-gray-100">
+    <div class="flex min-h-screen">
         <aside class="w-64 bg-white border-r">
-             <div class="p-6"><a href="#" class="text-2xl font-bold text-dark-orchid">CarePlus</a></div>
+            <div class="p-6"><a href="#" class="text-2xl font-bold text-dark-orchid">CarePlus</a></div>
             <nav class="px-4 space-y-2">
                 <a href="patientDashboard.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-table-columns w-5"></i><span>Dashboard</span></a>
-                <a href="caregiverBooking.php" class="flex items-center space-x-3 px-4 py-3 bg-purple-100 text-dark-orchid rounded-lg"><i class="fa-solid fa-hands-holding-child w-5"></i><span>Book Caregiver</span></a>
-                <a href="my_bookings.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-book-bookmark w-5"></i><span>My Bookings</span></a>
+                <a href="patientProfile.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-regular fa-user w-5"></i><span>My Profile</span></a>
+                <a href="find_provider.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-calendar-plus w-5"></i><span>Book Appointment</span></a>
+                <a href="patientAppointments.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-calendar-days w-5"></i><span>My Appointments</span></a>
+                <a href="caregiverBooking.php" class="flex items-center space-x-3 px-4 py-3 bg-purple-100 text-dark-orchid rounded-lg"><i class="fa-solid fa-hands-holding-child w-5"></i><span>Caregiver Bookings</span></a>
+                <a href="upload_medical_history.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-file-medical w-5"></i><span>Medical History</span></a>
                 <a href="logout.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg mt-8"><i class="fa-solid fa-arrow-right-from-bracket w-5"></i><span>Logout</span></a>
             </nav>
         </aside>
+
         <main class="flex-1 p-8">
-             <header class="flex justify-between items-center mb-8">
-                <div>
-                    <h1 class="text-3xl font-bold text-slate-800">Book a CareGiver</h1>
-                    <p class="text-gray-600 mt-1">Find and book professional caregivers for your needs.</p>
-                </div>
-                 <div class="flex items-center space-x-4">
-                    <div class="text-right">
-                        <p class="font-semibold text-slate-700"><?php echo htmlspecialchars($userName); ?></p>
-                        <p class="text-sm text-gray-500">Patient</p>
-                    </div>
-                    <div class="w-12 h-12 rounded-full bg-dark-orchid text-white flex items-center justify-center font-bold text-lg"><?php echo htmlspecialchars($userAvatar); ?></div>
-                </div>
+            <header class="flex justify-between items-center mb-8">
+                <div><h1 class="text-3xl font-bold text-slate-800">Find a Caregiver</h1><p class="text-gray-600 mt-1">Browse and book caregivers for your needs.</p></div>
             </header>
-            
-            <?php if ($successMsg): ?><div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6" role="alert"><p><?php echo $successMsg; ?></p></div><?php endif; ?>
-            <?php if ($errorMsg): ?><div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6" role="alert"><p><?php echo $errorMsg; ?></p></div><?php endif; ?>
+           
+            <?php if ($successMsg): ?><div class="mb-6 p-4 bg-green-100 text-green-800 rounded-md"><?php echo $successMsg; ?></div><?php endif; ?>
+            <?php if ($errorMsg): ?><div class="mb-6 p-4 bg-red-100 text-red-800 rounded-md"><?php echo $errorMsg; ?></div><?php endif; ?>
 
-            <div class="bg-white p-4 rounded-lg shadow-md mb-8">
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div>
-                        <label for="filterType" class="block text-sm font-medium text-gray-700">Caregiver Type</label>
-                        <select id="filterType" class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
-                            <option value="">All Types</option>
-                            <?php foreach($caregiverTypes as $type): ?>
-                                <option value="<?php echo htmlspecialchars($type); ?>"><?php echo htmlspecialchars($type); ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="filterBookingType" class="block text-sm font-medium text-gray-700">Booking Type</label>
-                        <select id="filterBookingType" class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
-                            <option value="">Any Type</option>
-                            <option value="Daily">Daily</option>
-                            <option value="Weekly">Weekly</option>
-                            <option value="Monthly">Monthly</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="filterDate" class="block text-sm font-medium text-gray-700">Available on Date</label>
-                        <input type="date" id="filterDate" class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
-                    </div>
-                     <div>
-                        <label class="block text-sm font-medium text-white invisible">Reset</label>
-                        <button id="resetFilters" class="mt-1 w-full p-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">Reset Filters</button>
-                    </div>
-                </div>
+            <div class="bg-white p-4 rounded-lg shadow-md mb-6">
+                <form method="GET" class="flex flex-wrap items-end gap-4">
+                    <div><label class="text-sm font-medium">Filter by Type</label><input type="text" name="type" value="<?php echo htmlspecialchars($typeFilter); ?>" placeholder="e.g., Nurse" class="w-full mt-1 p-2 border rounded-md"></div>
+                    <div><label class="text-sm font-medium">Available from Date</label><input type="date" name="date" value="<?php echo htmlspecialchars($dateFilter); ?>" class="w-full mt-1 p-2 border rounded-md"></div>
+                    <button type="submit" class="px-4 py-2 bg-dark-orchid text-white rounded-md font-semibold">Filter</button>
+                    <a href="caregiverBooking.php" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md">Clear</a>
+                </form>
             </div>
-
-            <div id="caregiverGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <?php foreach ($caregivers as $cg): ?>
-                <div class="caregiver-card bg-white p-6 rounded-lg shadow-lg flex flex-col" data-caregiver-id="<?php echo $cg['userID']; ?>" data-caregiver-type="<?php echo htmlspecialchars($cg['careGiverType']); ?>">
-                    <h3 class="text-lg font-semibold text-slate-800"><?php echo htmlspecialchars($cg['Name']); ?></h3>
-                    <p class="text-sm text-purple-600 mb-2"><?php echo htmlspecialchars($cg['careGiverType']); ?></p>
-                    <p class="text-sm text-gray-600 border-t pt-3 mt-3 mb-4"><i class="fa-solid fa-award mr-2 text-gray-400"></i><strong>Qualifications:</strong> <?php echo htmlspecialchars($cg['certifications']); ?></p>
-                    <div class="text-xs text-gray-500 border-t pt-3 mb-4 flex-grow">
-                        <p class="font-semibold text-gray-700 mb-2">Available Slots:</p>
-                        <div class="space-y-2">
-                             <?php
-                                $cgAvailabilities = $availabilitiesByCareGiver[$cg['userID']] ?? [];
-                                if (empty($cgAvailabilities)) { echo '<p class="text-red-500">No available slots.</p>'; } 
-                                else {
-                                    foreach ($cgAvailabilities as $avail) {
-                                        echo '<div class="p-2 bg-gray-50 rounded-md">';
-                                        echo '<p class="font-medium text-gray-800">Starts: '. (new DateTime($avail['startDate']))->format('M j, Y') .'</p>';
-                                        echo '<p class="text-gray-600">Booking Type: '. htmlspecialchars($avail['bookingType']) .'</p>';
-                                        echo '</div>';
-                                    }
-                                }
-                            ?>
-                        </div>
-                    </div>
-                    <button onclick='openBookingModal(<?php echo htmlspecialchars(json_encode($cg), ENT_QUOTES, "UTF-8"); ?>)' class="mt-auto w-full bg-dark-orchid text-white py-2 rounded-lg hover:bg-purple-700 transition">View Slots & Book</button>
-                </div>
-                <?php endforeach; ?>
-            </div>
-            <div id="noResults" class="hidden text-center py-10 bg-white rounded-lg shadow-lg">
-                <p class="text-gray-500">No caregivers match your filter criteria.</p>
-            </div>
+           
+            <div class="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"><?php echo generateCaregiverCards($caregivers); ?></div>
         </main>
     </div>
 
-    <div id="bookingModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
-        <div class="bg-white rounded-lg shadow-xl w-full max-w-lg">
-            <form method="POST" action="caregiverBooking.php">
-                <div class="p-6">
-                    <h3 class="text-xl font-bold text-slate-800 mb-2">Book <span id="modalCareGiverName"></span></h3>
-                    <p class="text-sm text-gray-500 mb-4">Select an available slot below to see the cost and confirm.</p>
-                    <input type="hidden" name="careGiverID" id="modalCareGiverID">
-                    <div id="slotsContainer" class="space-y-2 max-h-60 overflow-y-auto border p-3 rounded-md"></div>
-                    <div id="costDisplay" class="bg-gray-50 p-3 rounded-md text-sm mt-4 hidden">
-                        <p class="flex justify-between"><span>Service Period:</span> <strong id="periodDisplay">--</strong></p>
-                        <p class="flex justify-between mt-1"><span>Total Cost:</span> <strong id="totalAmountDisplay">--</strong></p>
-                    </div>
-                </div>
-                <div class="bg-gray-100 px-6 py-3 flex justify-end space-x-3">
-                    <button type="button" onclick="closeBookingModal()" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancel</button>
-                    <button type="submit" id="confirmBtn" class="px-4 py-2 bg-dark-orchid text-white rounded-md hover:bg-purple-700 disabled:opacity-50" disabled>Confirm Booking</button>
-                </div>
-            </form>
+    <div id="detailsModal" class="fixed inset-0 bg-black bg-opacity-60 hidden z-50 flex items-center justify-center p-4">
+        <div id="modalContent" class="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+            <div class="p-8 text-center">Loading details...</div>
         </div>
     </div>
-    
-    <script>
-        // --- (FULL JAVASCRIPT CODE) ---
-        const allAvailabilities = <?php echo json_encode($availabilitiesByCareGiver); ?>;
-        
-        const modal = document.getElementById('bookingModal');
-        const slotsContainer = document.getElementById('slotsContainer');
-        const confirmBtn = document.getElementById('confirmBtn');
-        const costDisplay = document.getElementById('costDisplay');
-        const periodDisplay = document.getElementById('periodDisplay');
-        const totalAmountDisplay = document.getElementById('totalAmountDisplay');
-        let currentCareGiver = null;
 
-        async function openBookingModal(careGiverData) {
-            currentCareGiver = careGiverData;
-            document.getElementById('modalCareGiverName').textContent = careGiverData.Name;
-            document.getElementById('modalCareGiverID').value = careGiverData.userID;
-            slotsContainer.innerHTML = '<p class="text-center text-gray-500">Loading availability...</p>';
+    <script>
+        const modal = document.getElementById('detailsModal');
+        const modalContent = document.getElementById('modalContent');
+
+        function closeModal() { modal.classList.add('hidden'); }
+
+        async function viewCaregiverDetails(caregiverId) {
+            modalContent.innerHTML = '<div class="p-8 text-center text-gray-500"><i class="fa-solid fa-spinner fa-spin fa-2x"></i><p class="mt-2">Loading details...</p></div>';
             modal.classList.remove('hidden');
 
-            const response = await fetch(`caregiverBooking.php?get_slots_for=${careGiverData.userID}`);
-            const slots = await response.json();
+            try {
+                const response = await fetch(`get_caregiver_details.php?id=${caregiverId}`);
+                const data = await response.json();
+               
+                if (data.error) throw new Error(data.error);
 
-            slotsContainer.innerHTML = '';
-            if (slots.length === 0) {
-                slotsContainer.innerHTML = '<p class="text-center text-red-500">This caregiver has no available slots.</p>';
-            } else {
-                slots.forEach(slot => {
-                    const date = new Date(slot.startDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-                    slotsContainer.innerHTML += `
-                        <label class="block p-3 border rounded-md hover:bg-purple-50 cursor-pointer">
-                            <input type="radio" name="book_availability_id" value="${slot.availabilityID}" class="mr-3" onchange="updateCost(this)"
-                                data-type="${slot.bookingType}" data-startdate="${slot.startDate}">
-                            <span class="font-semibold">Starts: ${date}</span>
-                            <span class="text-sm text-gray-600">(${slot.bookingType} Slot)</span>
-                        </label>
-                    `;
-                });
+                let scheduleHtml = '<p class="text-center text-gray-500 py-4">No available slots found.</p>';
+                if(data.availability.length > 0) {
+                    scheduleHtml = data.availability.map(slot => {
+                        const date = new Date(slot.startDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+                        return `<label class="flex items-center justify-between p-3 bg-purple-50 rounded-md cursor-pointer hover:bg-purple-100 transition-colors">
+                                    <input type="radio" name="availabilityID" value="${slot.availabilityID}" class="mr-3 h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300" required>
+                                    <div class="flex-grow">
+                                        <p class="font-semibold text-gray-800">Starts: ${date}</p>
+                                        <p class="text-sm text-gray-600">${slot.bookingType} Service</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="font-bold text-purple-600">৳${Number(data.profile[slot.bookingType.toLowerCase() + 'Rate']).toLocaleString()}</p>
+                                    </div>
+                                </label>`;
+                    }).join('');
+                }
+
+                modalContent.innerHTML = `
+                    <div class="p-6 border-b flex justify-between items-start">
+                        <div class="flex items-center space-x-4">
+                            <img src="${data.profile.profilePhoto || 'placeholder.png'}" class="w-20 h-20 rounded-full object-cover border-2 border-purple-100">
+                            <div>
+                                <h3 class="text-2xl font-bold text-slate-800">${data.profile.Name}</h3>
+                                <p class="text-gray-600">${data.profile.careGiverType}</p>
+                            </div>
+                        </div>
+                        <button onclick="closeModal()" class="text-2xl text-gray-400 hover:text-gray-600 transition-colors">&times;</button>
+                    </div>
+                    <form method="POST" class="flex-grow flex flex-col overflow-hidden">
+                        <div class="p-6 space-y-6 overflow-y-auto">
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-center">
+                                <div class="bg-gray-50 p-3 rounded-lg"><strong class="block text-gray-500">Daily Rate</strong> ৳${Number(data.profile.dailyRate).toLocaleString()}</div>
+                                <div class="bg-gray-50 p-3 rounded-lg"><strong class="block text-gray-500">Weekly Rate</strong> ৳${Number(data.profile.weeklyRate).toLocaleString()}</div>
+                                <div class="bg-gray-50 p-3 rounded-lg"><strong class="block text-gray-500">Monthly Rate</strong> ৳${Number(data.profile.monthlyRate).toLocaleString()}</div>
+                            </div>
+                            <div>
+                                <p class="text-gray-700 mb-2"><i class="fa-solid fa-award w-5 text-gray-400 mr-1"></i><span class="font-semibold">Qualifications:</span> ${data.profile.certifications || 'N/A'}</p>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-gray-800 mb-2">Select an Available Slot</h4>
+                                <div class="space-y-3 max-h-48 overflow-y-auto border p-3 rounded-md bg-gray-50">${scheduleHtml}</div>
+                            </div>
+                            <div>
+                                <label for="notes" class="block text-sm font-medium text-gray-700">Special Requirements (Optional)</label>
+                                <textarea name="notes" id="notes" rows="2" class="w-full mt-1 p-2 border rounded-md" placeholder="e.g., Specific care needs, medical conditions..."></textarea>
+                            </div>
+                        </div>
+                        <div class="bg-gray-100 p-4 mt-auto flex justify-end">
+                            <input type="hidden" name="careGiverID" value="${caregiverId}">
+                            <button type="submit" name="book_caregiver" class="px-6 py-2 bg-dark-orchid text-white rounded-md font-semibold hover:bg-purple-700">Book Now & Proceed to Pay</button>
+                        </div>
+                    </form>
+                `;
+            } catch (error) {
+                modalContent.innerHTML = `<div class="p-8 text-center"><p class="text-red-500">Error: Could not load caregiver details.</p><button onclick="closeModal()" class="mt-4 px-4 py-2 bg-gray-200 rounded-md">Close</button></div>`;
+                console.error('Fetch error:', error);
             }
         }
-        
-        function updateCost(radio) {
-            const bookingType = radio.dataset.type;
-            const startDate = new Date(radio.dataset.startdate);
-            let endDate = new Date(startDate);
-            let amount = 0;
-            
-            if(bookingType === 'Daily') { amount = parseFloat(currentCareGiver.dailyRate); endDate.setDate(endDate.getDate() + 1); }
-            if(bookingType === 'Weekly') { amount = parseFloat(currentCareGiver.weeklyRate); endDate.setDate(endDate.getDate() + 7); }
-            if(bookingType === 'Monthly') { amount = parseFloat(currentCareGiver.monthlyRate); endDate.setMonth(endDate.getMonth() + 1); }
-
-            periodDisplay.textContent = `${startDate.toLocaleDateString('en-CA')} to ${endDate.toLocaleDateString('en-CA')}`;
-            totalAmountDisplay.textContent = `৳${amount.toLocaleString()}`;
-            costDisplay.classList.remove('hidden');
-            confirmBtn.disabled = false;
-        }
-
-        function closeBookingModal() {
-            modal.classList.add('hidden');
-            confirmBtn.disabled = true;
-            costDisplay.classList.add('hidden');
-        }
-
-        // --- Filter Logic ---
-        const filterType = document.getElementById('filterType');
-        const filterBookingType = document.getElementById('filterBookingType');
-        const filterDate = document.getElementById('filterDate');
-        const resetBtn = document.getElementById('resetFilters');
-        const noResults = document.getElementById('noResults');
-
-        function filterCaregivers() {
-            const type = filterType.value;
-            const bookingType = filterBookingType.value;
-            const date = filterDate.value;
-            let visibleCount = 0;
-
-            document.querySelectorAll('.caregiver-card').forEach(card => {
-                const caregiverId = card.dataset.caregiverId;
-                const caregiverType = card.dataset.caregiverType;
-                let isVisible = true;
-
-                if (type && caregiverType !== type) isVisible = false;
-                if (isVisible && bookingType) {
-                    const hasBookingType = (allAvailabilities[caregiverId] || []).some(slot => slot.bookingType === bookingType);
-                    if (!hasBookingType) isVisible = false;
-                }
-                if (isVisible && date) {
-                    const selectedDate = new Date(date);
-                    const isAvailableOnDate = (allAvailabilities[caregiverId] || []).some(slot => {
-                        const startDate = new Date(slot.startDate);
-                        let endDate = new Date(startDate);
-                        if (slot.bookingType === 'Weekly') endDate.setDate(startDate.getDate() + 6);
-                        if (slot.bookingType === 'Monthly') {
-                            endDate.setMonth(startDate.getMonth() + 1);
-                            endDate.setDate(endDate.getDate() - 1);
-                        }
-                        return selectedDate >= startDate && selectedDate <= endDate;
-                    });
-                    if (!isAvailableOnDate) isVisible = false;
-                }
-                
-                card.style.display = isVisible ? 'flex' : 'none';
-                if (isVisible) visibleCount++;
-            });
-            noResults.style.display = visibleCount === 0 ? 'block' : 'none';
-        }
-        
-        filterType.addEventListener('change', filterCaregivers);
-        filterBookingType.addEventListener('change', filterCaregivers);
-        filterDate.addEventListener('change', filterCaregivers);
-        
-        resetBtn.addEventListener('click', () => {
-            filterType.value = '';
-            filterBookingType.value = '';
-            filterDate.value = '';
-            filterCaregivers();
-        });
     </script>
 </body>
 </html>

@@ -6,8 +6,34 @@ $conn = require_once 'config.php';
 $payment_type = null;
 $payment_details = [];
 
-// Check for a pending APPOINTMENT payment first
-if (isset($_SESSION['pending_appointment_id'])) {
+// Check for a pending CAREGIVER BOOKING payment first
+if (isset($_SESSION['pending_caregiver_booking_id'])) {
+    $payment_type = 'Caregiver Booking';
+    $bookingID = $_SESSION['pending_caregiver_booking_id'];
+    
+    $query = "
+        SELECT 
+            cb.bookingID as id, 
+            u.Name as caregiverName,
+            cb.bookingType,
+            cb.startDate,
+            cb.endDate,
+            cb.totalAmount as amount 
+        FROM caregiverbooking cb
+        JOIN users u ON cb.careGiverID = u.userID 
+        WHERE cb.bookingID = ?
+    ";
+    $stmt = $conn->prepare($query);
+    $stmt->bind_param("i", $bookingID);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    if ($result->num_rows > 0) {
+        $payment_details = $result->fetch_assoc();
+    }
+    $stmt->close();
+} 
+// Check for a pending APPOINTMENT payment
+elseif (isset($_SESSION['pending_appointment_id'])) {
     $payment_type = 'Appointment Fee';
     $appointmentID = $_SESSION['pending_appointment_id'];
     
@@ -58,6 +84,8 @@ if (empty($payment_details)) {
     header("Location: login.php");
     exit();
 }
+
+$conn->close();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -92,7 +120,24 @@ if (empty($payment_details)) {
                         <span class="text-gray-600">Payment For:</span>
                         <span class="font-medium text-gray-800"><?php echo htmlspecialchars($payment_type); ?></span>
                     </div>
-                    <?php if ($payment_type === 'Registration Fee'): ?>
+                    
+                    <?php if ($payment_type === 'Caregiver Booking'): ?>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Caregiver:</span>
+                            <span class="font-medium text-gray-800"><?php echo htmlspecialchars($payment_details['caregiverName']); ?></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Service Type:</span>
+                            <span class="font-medium text-gray-800"><?php echo htmlspecialchars($payment_details['bookingType']); ?></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Service Period:</span>
+                            <span class="font-medium text-gray-800">
+                                <?php echo date("M d, Y", strtotime($payment_details['startDate'])); ?> - 
+                                <?php echo date("M d, Y", strtotime($payment_details['endDate'])); ?>
+                            </span>
+                        </div>
+                    <?php elseif ($payment_type === 'Registration Fee'): ?>
                         <div class="flex justify-between">
                             <span class="text-gray-600">Account Type:</span>
                             <span class="font-medium text-gray-800"><?php echo htmlspecialchars($payment_details['role']); ?></span>
@@ -127,7 +172,9 @@ if (empty($payment_details)) {
             
             <form action="payment_success.php" method="POST">
                 <!-- Hidden fields to pass payment details -->
-                <?php if ($payment_type === 'Appointment Fee'): ?>
+                <?php if ($payment_type === 'Caregiver Booking'): ?>
+                    <input type="hidden" name="caregiver_booking_id" value="<?php echo $payment_details['id']; ?>">
+                <?php elseif ($payment_type === 'Appointment Fee'): ?>
                     <input type="hidden" name="appointment_id" value="<?php echo $payment_details['id']; ?>">
                 <?php else: ?>
                     <input type="hidden" name="user_id" value="<?php echo $payment_details['id']; ?>">
