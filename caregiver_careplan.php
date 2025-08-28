@@ -1,7 +1,33 @@
 <?php
-
+/**
+ * CAREGIVER CARE PLAN MANAGEMENT PAGE
+ * 
+ * This page allows caregivers to create, view, and manage care plans for their patients.
+ * 
+ * Database Tables Used:
+ * - careplan: Stores care plan details (exercisePlan, therapyInstructions, progressNotes)
+ * - caregiverbooking: Links care plans to patient bookings
+ * - users: Patient and caregiver information
+ * - patient: Patient-specific details
+ * 
+ * Features:
+ * - Create new care plans for active patient bookings
+ * - View existing care plans with patient information
+ * - Edit and update care plan details
+ * - Progress tracking and notes management
+ */
 
 session_start();
+
+// === DEBUG: Check if PHP is working ===
+if (!function_exists('mysqli_connect')) {
+    die("
+    <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; border: 1px solid #f39c12; border-radius: 5px; background-color: #fef5e7;'>
+        <h2 style='color: #f39c12;'>⚠️ PHP MySQL Extension Missing</h2>
+        <p>The mysqli extension is not loaded. Please check your PHP configuration.</p>
+    </div>
+    ");
+}
 
 // === AUTHENTICATION & ACCESS CONTROL ===
 if (!isset($_SESSION['userID']) || $_SESSION['role'] !== 'CareGiver') {
@@ -10,7 +36,21 @@ if (!isset($_SESSION['userID']) || $_SESSION['role'] !== 'CareGiver') {
 }
 
 // === DATABASE CONNECTION ===
-$conn = require_once 'config.php';
+try {
+    $conn = require_once 'config.php';
+    if (!$conn) {
+        throw new Exception("Failed to get database connection from config.php");
+    }
+} catch (Exception $e) {
+    die("
+    <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; border: 1px solid #e74c3c; border-radius: 5px; background-color: #fdf2f2;'>
+        <h2 style='color: #e74c3c;'>❌ Database Connection Error</h2>
+        <p><strong>Error:</strong> " . htmlspecialchars($e->getMessage()) . "</p>
+        <p><strong>Solution:</strong> Please check your XAMPP MySQL service and ensure the 'healthcare' database exists.</p>
+        <p><a href='http://localhost/phpmyadmin' target='_blank' style='color: #3498db;'>Open phpMyAdmin</a> to verify database setup.</p>
+    </div>
+    ");
+}
 
 // === SESSION DATA ===
 $caregiverID = $_SESSION['userID'];
@@ -759,20 +799,3 @@ $conn->close();
     </script>
 </body>
 </html>
-/**
- * CAREGIVER CARE PLAN MANAGEMENT PAGE
- * 
- * This page allows caregivers to create, view, and manage care plans for their patients.
- * 
- * Database Tables Used:
- * - careplan: Stores care plan details (exercisePlan, therapyInstructions, progressNotes)
- * - caregiverbooking: Links care plans to patient bookings
- * - users: Patient and caregiver information
- * - patient: Patient-specific details
- * 
- * Features:
- * - Create new care plans for active patient bookings
- * - View existing care plans with patient information
- * - Edit and update care plan details
- * - Progress tracking and notes management
- */
