@@ -58,3 +58,35 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['update_schedule'])) {
         $checkStmt->close();
     }
 }
+
+// Fetch the specific schedule details
+$sql = "SELECT availableDate, startTime, endTime, status FROM schedule WHERE scheduleID = ? AND providerID = ?";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("ii", $scheduleID, $nutritionistID);
+$stmt->execute();
+$result = $stmt->get_result();
+if ($result->num_rows === 1) {
+    $schedule = $result->fetch_assoc();
+    // After a successful update, refresh the schedule data to show the latest changes
+    if ($successMsg) {
+         $schedule['availableDate'] = $newDate;
+         $schedule['startTime'] = $newStartTime;
+         $schedule['endTime'] = $newEndTime;
+         $schedule['status'] = $newStatus;
+    }
+} else {
+    header("Location: nutritionist_schedule.php");
+    exit();
+}
+$stmt->close(;
+$conn->close();
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Edit Schedule - CarePlus</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <style>
