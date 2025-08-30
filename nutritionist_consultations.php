@@ -134,3 +134,40 @@ function formatTime($datetime) {
                         </div>
                     </div>
                 <?php } ?>
+                
+                <?php if (!empty($today)): ?>
+                <section>
+                    <h2 class="text-2xl font-bold text-slate-800 mb-4 border-b pb-2">Today's Consultations</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <?php foreach ($today as $consult) { render_consultation_card($consult); } ?>
+                    </div>
+                </section>
+                <?php endif; ?>
+
+                <?php if (!empty($tomorrow)): ?>
+                <section>
+                    
+                </section>
+                <?php endif; ?>
+
+                <?php if (!empty($upcoming)): ?>
+                <section>
+                    <h2 class="text-2xl font-bold text-slate-800 mb-4 border-b pb-2">Upcoming Consultations</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <?php foreach ($upcoming as $consult) { render_consultation_card($consult); } ?>
+                    </div>
+                </section>
+                <?php endif; ?>
+
+                <?php if (empty($today) && empty($tomorrow) && empty($upcoming)): ?>
+                <div class="text-center py-20 bg-white rounded-lg shadow-lg">
+                    <i class="fa-solid fa-calendar-xmark fa-4x text-gray-400 mb-4"></i>
+                    <h3 class="text-lg font-semibold text-gray-600 mb-1">No Consultations Scheduled</h3>
+                    <p class="text-gray-500">You do not have any upcoming appointments.</p>
+                </div>
+                <?php endif; ?>
+            </div>
+        </main>
+    </div>
+</body>
+</html>
