@@ -45,9 +45,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['update_schedule'])) {
             $errorMsg = "The updated schedule overlaps with another existing time slot.";
         } else {
             $updateSql = "UPDATE schedule SET availableDate = ?, startTime = ?, endTime = ?, status = ? WHERE scheduleID = ? AND providerID = ?";
-            
+            $updateStmt = $conn->prepare($updateSql);
+            $updateStmt->bind_param("ssssii", $newDate, $newStartTime, $newEndTime, $newStatus, $scheduleID, $nutritionistID);
 
-            if ($updateStmt->execute()) 
+            if ($updateStmt->execute()) {
                 $successMsg = "Schedule updated successfully!";
             } else {
                 $errorMsg = "Failed to update schedule. Please try again.";
@@ -56,3 +57,4 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['update_schedule'])) {
         }
         $checkStmt->close();
     }
+}
