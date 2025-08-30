@@ -24,3 +24,27 @@ $query = "
     WHERE a.providerID = ? AND a.status = 'Scheduled'
     ORDER BY a.appointmentDate ASC
 ";
+
+$stmt = $conn->prepare($query);
+$stmt->bind_param("i", $nutritionistID);
+$stmt->execute();
+$consultations = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$stmt->close();
+$conn->close();
+
+// Group consultations by date
+$today = [];
+$tomorrow = [];
+$now = new DateTime();
+$tomorrowDate = (new DateTime())->modify('+1 day');
+
+foreach ($consultations as $consult) {
+    $appointmentDate = new DateTime($consult['appointmentDate']);
+    if ($appointmentDate->format('Y-m-d') === $now->format('Y-m-d')) {
+        $today[] = $consult;
+    } elseif ($appointmentDate->format('Y-m-d') === $tomorrowDate->format('Y-m-d')) {
+        $tomorrow[] = $consult;
+    } elseif ($appointmentDate > $now) {
+        $upcoming[] = $consult;
+    }
+}
