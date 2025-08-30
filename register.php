@@ -81,7 +81,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         } catch (mysqli_sql_exception $exception) {
             $conn->rollback();
-            $errorMsg = "Registration failed. Please try again.";
+            // Provide more detailed error message for debugging
+            $errorMsg = "Registration failed. Error: " . $exception->getMessage();
+            
+            // Log the error for administrators
+            error_log("Registration Error: " . $exception->getMessage());
         }
     }
     $checkStmt->close();

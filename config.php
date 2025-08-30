@@ -1,16 +1,24 @@
 <?php
 // Database configuration
 $host = "localhost";
-$port = 3307; // XAMPP MySQL port
+$port = 3307; // XAMPP MySQL port (first try)
 $username = "root";
 $password = ""; // Change this if your MySQL root has a password
 $database = "healthcare";
 
 // Try to connect and provide helpful error messages
 try {
+    // First try port 3307
     $conn = new mysqli($host, $username, $password, $database, $port);
+    
+    // If that fails, try port 3306 (standard MySQL port)
     if ($conn->connect_error) {
-        throw new Exception("Connection failed: " . $conn->connect_error);
+        $port = 3306;
+        $conn = new mysqli($host, $username, $password, $database, $port);
+        
+        if ($conn->connect_error) {
+            throw new Exception("Connection failed: " . $conn->connect_error);
+        }
     }
 } catch (Exception $e) {
     // Common XAMPP MySQL passwords to try
