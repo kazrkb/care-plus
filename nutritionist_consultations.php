@@ -98,3 +98,39 @@ function formatTime($datetime) {
         </aside>
 
         <main class="flex-1 p-8">
+            <header class="flex justify-between items-center mb-8">
+                <div>
+                    <h1 class="text-3xl font-bold text-slate-800">My Consultations</h1>
+                    <p class="text-gray-600 mt-1">View your upcoming scheduled appointments.</p>
+                </div>
+                <div class="flex items-center space-x-4">
+                     <div class="text-right">
+                        <p class="font-semibold text-slate-700"><?php echo htmlspecialchars($userName); ?></p>
+                        <p class="text-sm text-gray-500">Nutritionist</p>
+                    </div>
+                    <div class="w-12 h-12 rounded-full bg-dark-orchid text-white flex items-center justify-center font-bold text-lg"><?php echo htmlspecialchars($userAvatar); ?></div>
+                </div>
+            </header>
+
+            <div class="space-y-10">
+                <?php function render_consultation_card($consult) { ?>
+                    <div class="consultation-card bg-white p-6 rounded-lg shadow-lg">
+                        <div>
+                            <h3 class="text-xl font-semibold text-slate-800 mb-3"><?php echo htmlspecialchars($consult['patientName']); ?></h3>
+                            <div class="space-y-2 text-sm text-gray-600 mb-4">
+                                <div class="flex items-center"><i class="fa-solid fa-hashtag w-5 text-gray-400"></i> Patient ID: <span class="font-medium text-gray-800 ml-1"><?php echo $consult['patientID']; ?></span></div>
+                                <div class="flex items-center"><i class="fa-solid fa-cake-candles w-5 text-gray-400"></i> Age: <span class="font-medium text-gray-800 ml-1"><?php echo htmlspecialchars($consult['patientAge'] ?? 'N/A'); ?></span></div>
+                                <div class="flex items-center"><i class="fa-solid fa-calendar-day w-5 text-gray-400"></i> Date: <span class="font-medium text-gray-800 ml-1"><?php echo formatDate($consult['appointmentDate']); ?></span></div>
+                                <div class="flex items-center"><i class="fa-solid fa-clock w-5 text-gray-400"></i> Time: <span class="font-medium text-gray-800 ml-1"><?php echo formatTime($consult['appointmentDate']); ?></span></div>
+                            </div>
+                        </div>
+                        <div class="flex flex-col space-y-2 mt-4">
+                            <a href="<?php echo htmlspecialchars($consult['consultation_link']); ?>" target="_blank" class="w-full text-center font-medium text-white bg-green-500 hover:bg-green-600 px-4 py-2 rounded-lg transition">
+                                <i class="fa-solid fa-video mr-2"></i>Join Meet
+                            </a>
+                            <a href="create_diet_plan.php?appointment_id=<?php echo $consult['appointmentID']; ?>" class="w-full text-center font-medium text-dark-orchid bg-purple-100 hover:bg-purple-200 px-4 py-2 rounded-lg transition">
+                                <i class="fa-solid fa-utensils mr-2"></i>Create Diet Plan
+                            </a>
+                        </div>
+                    </div>
+                <?php } ?>
