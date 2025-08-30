@@ -117,7 +117,12 @@ $conn->close();
 
                 <form action="nutritionist_edit_schedule.php?id=<?php echo $scheduleID; ?>" method="POST" class="space-y-4">
                     <input type="hidden" name="original_status" value="<?php echo htmlspecialchars($schedule['status']); ?>">
-                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Date</label>
+                        <input type="date" name="availableDate" value="<?php echo htmlspecialchars($schedule['availableDate']); ?>" 
+                               <?php if ($schedule['status'] !== 'Available') echo 'readonly'; ?> 
+                               required class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm">
+                    </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Start Time</label>
