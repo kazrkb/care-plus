@@ -146,7 +146,10 @@ function formatTime($datetime) {
 
                 <?php if (!empty($tomorrow)): ?>
                 <section>
-                    
+                    <h2 class="text-2xl font-bold text-slate-800 mb-4 border-b pb-2">Tomorrow's Consultations</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <?php foreach ($tomorrow as $consult) { render_consultation_card($consult); } ?>
+                    </div>
                 </section>
                 <?php endif; ?>
 
