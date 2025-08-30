@@ -10,6 +10,10 @@ if (!isset($_SESSION['userID']) || $_SESSION['role'] !== 'Nutritionist') {
 $conn = require_once 'config.php';
 date_default_timezone_set('Asia/Dhaka');
 
+$nutritionistID = $_SESSION['userID'];
+$errorMsg = "";
+$successMsg = "";
+$schedule = null;
 
 // Get Schedule ID from URL
 if (!isset($_GET['id']) || !filter_var($_GET['id'], FILTER_VALIDATE_INT)) {
