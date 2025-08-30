@@ -150,3 +150,13 @@ $conn->close();
                             </select>
                         </div>
                     <?php endif; ?>
+
+                    <button type="submit" name="update_schedule" class="w-full py-2 px-4 bg-dark-orchid text-white rounded-md font-semibold hover:bg-purple-700 transition shadow-sm">
+                        Update Schedule
+                    </button>
+                </form>
+            </div>
+        </main>
+    </div>
+</body>
+</html>
