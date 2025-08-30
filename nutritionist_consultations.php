@@ -97,4 +97,4 @@ function formatTime($datetime) {
             </nav>
         </aside>
 
-     
+        <main class="flex-1 p-8">
