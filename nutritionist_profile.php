@@ -9,4 +9,5 @@ if (!isset($_SESSION['userID']) || $_SESSION['role'] !== 'Nutritionist') {
 }
 
 $nutritionistID = $_SESSION['userID'];
+$successMsg = "";
 $errorMsg = "";
