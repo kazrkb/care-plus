@@ -15,13 +15,49 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $email = $_POST['email'];
     $inputPassword = $_POST['password'];
 
-    $stmt = $conn->prepare("SELECT userID, Name, password, role, verification_status, payment_status FROM Users WHERE email = ?");
+    // Check which columns exist
+    $hasPaymentStatus = false;
+    $hasVerificationStatus = false;
+    
+    $result = $conn->query("SHOW COLUMNS FROM Users LIKE 'payment_status'");
+    if ($result && $result->num_rows > 0) {
+        $hasPaymentStatus = true;
+    }
+    
+    $result = $conn->query("SHOW COLUMNS FROM Users LIKE 'verification_status'");
+    if ($result && $result->num_rows > 0) {
+        $hasVerificationStatus = true;
+    }
+    
+    // Build the query based on which columns exist
+    $selectFields = "userID, Name, password, role";
+    if ($hasVerificationStatus) {
+        $selectFields .= ", verification_status";
+    }
+    if ($hasPaymentStatus) {
+        $selectFields .= ", payment_status";
+    }
+    
+    $stmt = $conn->prepare("SELECT $selectFields FROM Users WHERE email = ?");
     $stmt->bind_param("s", $email);
     $stmt->execute();
     $stmt->store_result();
 
     if ($stmt->num_rows === 1) {
-        $stmt->bind_result($userID, $Name, $hashedPassword, $role, $verification_status, $payment_status);
+        // Set default values for missing columns
+        $verification_status = 'Approved'; // Default if column doesn't exist
+        $payment_status = 'Paid'; // Default if column doesn't exist
+        
+        // Bind result variables based on which columns exist
+        if ($hasVerificationStatus && $hasPaymentStatus) {
+            $stmt->bind_result($userID, $Name, $hashedPassword, $role, $verification_status, $payment_status);
+        } else if ($hasVerificationStatus && !$hasPaymentStatus) {
+            $stmt->bind_result($userID, $Name, $hashedPassword, $role, $verification_status);
+        } else if (!$hasVerificationStatus && $hasPaymentStatus) {
+            $stmt->bind_result($userID, $Name, $hashedPassword, $role, $payment_status);
+        } else {
+            $stmt->bind_result($userID, $Name, $hashedPassword, $role);
+        }
         $stmt->fetch();
         $stmt->close(); 
 

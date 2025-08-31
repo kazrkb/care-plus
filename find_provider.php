@@ -67,7 +67,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['book_appointment'])) 
 
 // --- Fetch all Doctors and Nutritionists (with filtering) ---
 $baseQuery = "SELECT u.userID, u.Name, u.role, u.profilePhoto, COALESCE(d.specialty, n.specialty) as specialty, COALESCE(d.consultationFees, n.consultationFees) as fees FROM users u LEFT JOIN doctor d ON u.userID = d.doctorID LEFT JOIN nutritionist n ON u.userID = n.nutritionistID";
-$whereClauses = ["u.role IN ('Doctor', 'Nutritionist')", "u.verification_status = 'Approved'"];
+
+// Check if verification_status column exists
+$columnCheck = $conn->query("SHOW COLUMNS FROM users LIKE 'verification_status'");
+$hasVerificationStatus = $columnCheck->num_rows > 0;
+
+$whereClauses = ["u.role IN ('Doctor', 'Nutritionist')"];
+if ($hasVerificationStatus) {
+    $whereClauses[] = "u.verification_status = 'Approved'";
+}
+
 $params = [];
 $types = "";
 
