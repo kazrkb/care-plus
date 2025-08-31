@@ -24,8 +24,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->close();
             
             // Insert transaction
-            $stmt = $conn->prepare("INSERT INTO transaction (careProviderBookingID, userID, amount, transactionType, status, timestamp, gatewayTransactionID) VALUES (?, ?, ?, 'Caregiver Booking', 'Completed', NOW(), ?)");
-            $stmt->bind_param("iids", $bookingID, $booking['patientID'], $amount, $gatewayTransactionId);
+            $stmt = $conn->prepare("INSERT INTO transaction (careProviderBookingID, amount, transactionType, status, timestamp) VALUES (?, ?, 'Caregiver Booking', 'Completed', NOW())");
+            $stmt->bind_param("id", $bookingID, $amount);
             $stmt->execute();
             $stmt->close();
             
@@ -36,9 +36,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // --- If it's a REGISTRATION payment ---
         } elseif (isset($_POST['user_id'])) {
             $userID = (int)$_POST['user_id'];
-            $conn->prepare("UPDATE Users SET payment_status = 'Paid' WHERE userID = ? AND payment_status = 'Unpaid'")->execute([$userID]);
-            $stmt = $conn->prepare("INSERT INTO transaction (userID, amount, transactionType, status, timestamp, gatewayTransactionID) VALUES (?, ?, 'Registration Fee', 'Completed', NOW(), ?)");
-            $stmt->bind_param("ids", $userID, $amount, $gatewayTransactionId);
+            $stmt = $conn->prepare("INSERT INTO transaction (amount, transactionType, status, timestamp) VALUES (?, 'Registration Fee', 'Completed', NOW())");
+            $stmt->bind_param("d", $amount);
             $stmt->execute();
             $stmt->close();
             unset($_SESSION['pending_user_id']);
@@ -56,8 +55,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $appointment = $stmt->get_result()->fetch_assoc();
             $stmt->close();
             
-            $stmt = $conn->prepare("INSERT INTO transaction (appointmentID, userID, amount, transactionType, status, timestamp, gatewayTransactionID) VALUES (?, ?, ?, 'Appointment Fee', 'Completed', NOW(), ?)");
-            $stmt->bind_param("iids", $appointmentID, $appointment['patientID'], $amount, $gatewayTransactionId);
+            $stmt = $conn->prepare("INSERT INTO transaction (appointmentID, amount, transactionType, status, timestamp) VALUES (?, ?, 'Appointment Fee', 'Completed', NOW())");
+            $stmt->bind_param("id", $appointmentID, $amount);
             $stmt->execute();
             $stmt->close();
             // Optionally, you could update the appointment status to 'Confirmed' here
