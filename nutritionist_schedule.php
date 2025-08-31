@@ -88,3 +88,52 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['add_schedule'])) {
         $stmt->close();
     }
 }
+
+// --- Fetch Upcoming Availability (status = 'Available') ---
+$availability = [];
+$stmt = $conn->prepare("SELECT scheduleID, availableDate, startTime, endTime, status FROM schedule WHERE providerID = ? AND status = 'Available' AND (availableDate > ? OR (availableDate = ? AND endTime >= ?)) ORDER BY availableDate ASC, startTime ASC");
+$stmt->bind_param("isss", $nutritionistID, $todayDate, $todayDate, $nowTime);
+$stmt->execute();
+$result = $stmt->get_result();
+while($row = $result->fetch_assoc()) {
+    $availability[] = $row;
+}
+$stmt->close();
+
+// --- Fetch Upcoming Bookings (Booked, Canceled, etc.) ---
+$bookings = [];
+$stmt = $conn->prepare("SELECT scheduleID, availableDate, startTime, endTime, status FROM schedule WHERE providerID = ? AND status IN ('Booked', 'Canceled', 'Rescheduled') AND (availableDate > ? OR (availableDate = ? AND endTime >= ?)) ORDER BY availableDate ASC, startTime ASC");
+$stmt->bind_param("isss", $nutritionistID, $todayDate, $todayDate, $nowTime);
+$stmt->execute();
+$result = $stmt->get_result();
+while($row = $result->fetch_assoc()) {
+    $bookings[] = $row;
+}
+$stmt->close();
+
+// --- Fetch Historical Schedules ---
+$historySchedules = [];
+$stmt = $conn->prepare("SELECT scheduleID, availableDate, startTime, endTime, status FROM schedule WHERE providerID = ? AND (availableDate < ? OR (availableDate = ? AND endTime < ?)) ORDER BY availableDate DESC, startTime DESC");
+$stmt->bind_param("isss", $nutritionistID, $todayDate, $todayDate, $nowTime);
+$stmt->execute();
+$result = $stmt->get_result();
+while($row = $result->fetch_assoc()) {
+    $historySchedules[] = $row;
+}
+$stmt->close();
+
+$conn->close();
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>My Schedule - CarePlus</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .bg-dark-orchid { background-color: #9932CC; }
+        .text-dark-orchid { color: #9932CC; }
+    </style>
