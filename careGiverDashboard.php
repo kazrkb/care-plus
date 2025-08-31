@@ -22,3 +22,10 @@ if (isset($_GET['dismiss_notification_id'])) {
     header("Location: careGiverDashboard.php");
     exit();
 }
+// --- Fetch all 'Unread' notifications ---
+$notifyQuery = "SELECT * FROM notification WHERE userID = ? AND status = 'Unread' ORDER BY notificationID DESC";
+$stmt = $conn->prepare($notifyQuery);
+$stmt->bind_param("i", $careGiverID);
+$stmt->execute();
+$notifications = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$stmt->close();
