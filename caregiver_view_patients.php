@@ -106,8 +106,7 @@ if ($selectedPatientID) {
                 endDate,
                 totalAmount,
                 status,
-                createdAt,
-                notes
+                availabilityID
             FROM caregiverbooking 
             WHERE careGiverID = ? AND patientID = ?
             ORDER BY startDate DESC
@@ -478,19 +477,10 @@ $conn->close();
                                                     <p><span class="font-medium">End Date:</span> <?php echo date('M j, Y', strtotime($booking['endDate'])); ?></p>
                                                 </div>
                                                 <div>
-                                                    <p><span class="font-medium">Booked:</span> <?php echo date('M j, Y g:i A', strtotime($booking['createdAt'])); ?></p>
+                                                    <p><span class="font-medium">Amount:</span> ৳<?php echo number_format($booking['totalAmount'], 2); ?></p>
                                                     <p><span class="font-medium">Booking ID:</span> #<?php echo $booking['bookingID']; ?></p>
                                                 </div>
                                             </div>
-                                            
-                                            <?php if ($booking['notes']): ?>
-                                            <div class="mt-3 pt-3 border-t border-gray-100">
-                                                <p class="text-sm text-gray-600">
-                                                    <span class="font-medium">Notes:</span> 
-                                                    <?php echo htmlspecialchars($booking['notes']); ?>
-                                                </p>
-                                            </div>
-                                            <?php endif; ?>
                                         </div>
                                         <?php endforeach; ?>
                                     </div>
