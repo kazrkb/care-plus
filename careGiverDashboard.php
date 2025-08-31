@@ -12,6 +12,7 @@ if (!isset($_SESSION['userID']) || $_SESSION['role'] !== 'CareGiver') {
 $careGiverID = $_SESSION['userID'];
 $userName = $_SESSION['Name'];
 $userAvatar = strtoupper(substr($userName, 0, 2));
+
 // --- Handle Dismissing a Notification ---
 if (isset($_GET['dismiss_notification_id'])) {
     $notificationID = (int)$_GET['dismiss_notification_id'];
@@ -22,6 +23,7 @@ if (isset($_GET['dismiss_notification_id'])) {
     header("Location: careGiverDashboard.php");
     exit();
 }
+
 // --- Fetch all 'Unread' notifications ---
 $notifyQuery = "SELECT * FROM notification WHERE userID = ? AND status = 'Unread' ORDER BY notificationID DESC";
 $stmt = $conn->prepare($notifyQuery);
@@ -29,6 +31,7 @@ $stmt->bind_param("i", $careGiverID);
 $stmt->execute();
 $notifications = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
+
 // --- Fetch Progress Data (replace with your actual query) ---
 $progressData = [
     ['patientName'=>'Alice','dataType'=>'blood_pressure','value'=>120,'recordedDate'=>'2025-08-29 08:00'],
@@ -38,6 +41,7 @@ $progressData = [
     ['patientName'=>'Charlie','dataType'=>'temperature','value'=>36.6,'recordedDate'=>'2025-08-31 12:00'],
     ['patientName'=>'Charlie','dataType'=>'oxygen_level','value'=>98,'recordedDate'=>'2025-08-31 12:30'],
 ];
+
 $dates = array_unique(array_map(fn($r)=>date('Y-m-d', strtotime($r['recordedDate'])),$progressData));
 sort($dates);
 
