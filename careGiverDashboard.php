@@ -29,3 +29,12 @@ $stmt->bind_param("i", $careGiverID);
 $stmt->execute();
 $notifications = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
+// --- Fetch Progress Data (replace with your actual query) ---
+$progressData = [
+    ['patientName'=>'Alice','dataType'=>'blood_pressure','value'=>120,'recordedDate'=>'2025-08-29 08:00'],
+    ['patientName'=>'Alice','dataType'=>'blood_sugar','value'=>5.5,'recordedDate'=>'2025-08-29 09:00'],
+    ['patientName'=>'Bob','dataType'=>'weight','value'=>70,'recordedDate'=>'2025-08-30 10:00'],
+    ['patientName'=>'Bob','dataType'=>'heart_rate','value'=>75,'recordedDate'=>'2025-08-30 11:00'],
+    ['patientName'=>'Charlie','dataType'=>'temperature','value'=>36.6,'recordedDate'=>'2025-08-31 12:00'],
+    ['patientName'=>'Charlie','dataType'=>'oxygen_level','value'=>98,'recordedDate'=>'2025-08-31 12:30'],
+];
