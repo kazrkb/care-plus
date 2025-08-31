@@ -22,3 +22,10 @@ if (!isset($_SESSION['userID'], $_SESSION['role']) || $_SESSION['role'] !== 'Car
     header("Location: login.php?error=Access denied. This page is for CareGivers only");
     exit();
 }
+// CSRF token
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+$careGiverID = (int)$_SESSION['userID'];
+$userName    = $_SESSION['Name'] ?? 'CareGiver';
