@@ -17,3 +17,8 @@ if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) >
     exit();
 }
 $_SESSION['last_activity'] = time();
+// Require caregiver
+if (!isset($_SESSION['userID'], $_SESSION['role']) || $_SESSION['role'] !== 'CareGiver') {
+    header("Location: login.php?error=Access denied. This page is for CareGivers only");
+    exit();
+}
