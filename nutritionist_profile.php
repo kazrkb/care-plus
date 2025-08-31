@@ -13,7 +13,7 @@ $successMsg = "";
 $errorMsg = "";
 
 // --- Handle Profile Update (POST Request) ---
-if ($_SERVER["REQUEST_METHOD"] === "POST") {
+if (["REQUEST_METHOD"] === "POST") {
     // Begin a transaction for updating two tables
     $conn->begin_transaction();
 

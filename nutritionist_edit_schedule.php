@@ -68,7 +68,7 @@ $result = $stmt->get_result();
 if ($result->num_rows === 1) {
     $schedule = $result->fetch_assoc();
     // After a successful update, refresh the schedule data to show the latest changes
-    if () {
+    if ($successMsg) {
          $schedule['availableDate'] = $newDate;
          $schedule['startTime'] = $newStartTime;
          $schedule['endTime'] = $newEndTime;
