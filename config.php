@@ -1,7 +1,7 @@
 <?php
 // Database configuration
 $host = "localhost";
-$port = 3307; // XAMPP MySQL port (first try)
+$port = 3306; // XAMPP MySQL port (first try)
 $username = "root";
 $password = ""; // Change this if your MySQL root has a password
 $database = "healthcare";

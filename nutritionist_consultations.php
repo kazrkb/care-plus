@@ -128,7 +128,7 @@ function formatTime($datetime) {
                             <a href="<?php echo htmlspecialchars($consult['consultation_link']); ?>" target="_blank" class="w-full text-center font-medium text-white bg-green-500 hover:bg-green-600 px-4 py-2 rounded-lg transition">
                                 <i class="fa-solid fa-video mr-2"></i>Join Meet
                             </a>
-                            <a href="create_diet_plan.php?appointment_id=<?php echo $consult['appointmentID']; ?>" class="w-full text-center font-medium text-dark-orchid bg-purple-100 hover:bg-purple-200 px-4 py-2 rounded-lg transition">
+                            <a href="nutritionist_create_dietplan.php?appointment_id=<?php echo $consult['appointmentID']; ?>" class="w-full text-center font-medium text-dark-orchid bg-purple-100 hover:bg-purple-200 px-4 py-2 rounded-lg transition">
                                 <i class="fa-solid fa-utensils mr-2"></i>Create Diet Plan
                             </a>
                         </div>
