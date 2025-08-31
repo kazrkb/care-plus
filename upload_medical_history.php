@@ -83,7 +83,7 @@ $conn->close();
             <div class="p-6"><a href="#" class="text-2xl font-bold text-dark-orchid">CarePlus</a></div>
             <nav class="px-4 space-y-2">
                 <a href="patientDashboard.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-table-columns w-5"></i><span>Dashboard</span></a>
-                <a href="patient_medical_history.php" class="flex items-center space-x-3 px-4 py-3 bg-purple-100 text-dark-orchid rounded-lg"><i class="fa-solid fa-file-medical w-5"></i><span>Medical History</span></a>
+                <a href="upload_medical_history.php" class="flex items-center space-x-3 px-4 py-3 bg-purple-100 text-dark-orchid rounded-lg"><i class="fa-solid fa-file-medical w-5"></i><span>Medical History</span></a>
                 <a href="logout.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg mt-8"><i class="fa-solid fa-arrow-right-from-bracket w-5"></i><span>Logout</span></a>
             </nav>
         </aside>
@@ -98,10 +98,6 @@ $conn->close();
                     <a href="view_my_records.php" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
                         <i class="fa-solid fa-eye mr-2"></i>View Uploaded Records
                     </a>
-                    <div class="text-right">
-                        <p class="font-semibold text-slate-700"><?php echo htmlspecialchars($userName); ?></p>
-                        <p class="text-sm text-gray-500">Patient</p>
-                    </div>
                     <div class="w-12 h-12 rounded-full bg-dark-orchid text-white flex items-center justify-center font-bold text-lg"><?php echo htmlspecialchars($userAvatar); ?></div>
                 </div>
             </header>
@@ -110,7 +106,7 @@ $conn->close();
             <?php if ($errorMsg): ?><div class="mb-6 p-4 bg-red-100 text-red-800 border-l-4 border-red-500 rounded-r-lg" role="alert"><p><?php echo $errorMsg; ?></p></div><?php endif; ?>
 
             <div class="bg-white p-6 rounded-xl shadow-lg">
-                <form action="patient_medical_history.php" method="POST" enctype="multipart/form-data" class="space-y-4">
+                <form action="upload_medical_history.php" method="POST" enctype="multipart/form-data" class="space-y-4">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label for="visitDate" class="block text-sm font-medium text-gray-700">Visit Date</label>
