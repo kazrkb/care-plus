@@ -281,18 +281,6 @@ $conn->close();
                         <i class="fa-solid fa-calendar-days w-5"></i>
                         <span>Availability</span>
                     </a>
-                    
-                    <a href="my_bookings.php" 
-                       class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg transition">
-                        <i class="fa-solid fa-calendar-check w-5"></i>
-                        <span>My Bookings</span>
-                    </a>
-                    
-                    <a href="#" 
-                       class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg transition">
-                        <i class="fa-solid fa-heart-pulse w-5"></i>
-                        <span>Patient Care</span>
-                    </a>
                 </div>
                 
                 <div class="mt-8 pt-4 border-t border-gray-200">
