@@ -73,6 +73,35 @@ $appointmentsStmt->execute();
 $appointmentsResult = $appointmentsStmt->get_result();
 $appointments = $appointmentsResult->fetch_all(MYSQLI_ASSOC);
 
+// Get prescriptions for completed appointments
+$prescriptionsQuery = "
+    SELECT 
+        p.prescriptionID,
+        p.`medicineNames-dosages` as medicineInfo,
+        p.instructions,
+        p.date,
+        p.appointmentID,
+        u.Name as doctorName,
+        d.specialty,
+        d.hospital,
+        d.licNo,
+        pat.Name as patientName,
+        pat.userID as patientUserID
+    FROM prescription p
+    INNER JOIN appointment a ON p.appointmentID = a.appointmentID
+    INNER JOIN users u ON p.doctorID = u.userID
+    INNER JOIN doctor d ON u.userID = d.doctorID
+    INNER JOIN users pat ON a.patientID = pat.userID
+    WHERE a.patientID = ? AND a.status = 'Completed'
+    ORDER BY p.date DESC
+";
+
+$prescriptionsStmt = $conn->prepare($prescriptionsQuery);
+$prescriptionsStmt->bind_param("i", $userID);
+$prescriptionsStmt->execute();
+$prescriptionsResult = $prescriptionsStmt->get_result();
+$prescriptions = $prescriptionsResult->fetch_all(MYSQLI_ASSOC);
+
 $conn->close();
 ?>
 <!DOCTYPE html>
@@ -95,6 +124,26 @@ $conn->close();
         .appointment-card:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* Modal styles */
+        .modal-overlay {
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(2px);
+        }
+        
+        /* Prescription styles */
+        .prescription-header {
+            background: linear-gradient(135deg, #9932CC 0%, #DA70D6 100%);
+        }
+        
+        .prescription-content {
+            font-family: 'Times New Roman', Times, serif;
+        }
+        
+        @media print {
+            .no-print { display: none !important; }
+            body { margin: 0; background: white; }
         }
     </style>
 </head>
@@ -294,11 +343,11 @@ $conn->close();
                                         <?php endif; ?>
                                         
                                         <?php if ($appointment['status'] === 'Completed'): ?>
-                                            <a href="patientMedicalHistory.php#prescriptions" 
+                                            <button onclick="openPrescriptionModalByAppointmentId(<?php echo $appointment['appointmentID']; ?>)" 
                                                class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition-colors">
                                                 <i class="fa-solid fa-prescription mr-2"></i>
                                                 View Prescription
-                                            </a>
+                                            </button>
                                         <?php endif; ?>
                                     </div>
                                     
@@ -386,6 +435,195 @@ $conn->close();
         // Initialize with upcoming appointments
         document.addEventListener('DOMContentLoaded', function() {
             showTab('upcoming');
+        });
+    </script>
+
+    <!-- Prescription Modal -->
+    <div id="prescriptionModal" class="fixed inset-0 modal-overlay hidden items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full m-4 max-h-screen overflow-y-auto prescription-modal border-2 border-gray-200">
+            <!-- Modal Header -->
+            <div class="bg-gray-100 border-b-2 border-gray-300 p-4 no-print">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-xl font-bold text-gray-800" style="font-family: 'Times New Roman', serif;">
+                        <i class="fa-solid fa-prescription mr-2"></i>
+                        Medical Prescription
+                    </h3>
+                    <div class="flex items-center space-x-3">
+                        <button onclick="downloadModalPDF()" class="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg transition-colors text-sm">
+                            <i class="fa-solid fa-file-pdf mr-2"></i>
+                            Print as PDF
+                        </button>
+                        <button onclick="printPrescription()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors text-sm">
+                            <i class="fa-solid fa-print mr-2"></i>
+                            Print
+                        </button>
+                        <button onclick="closePrescriptionModal()" class="text-gray-600 hover:text-gray-800 p-2">
+                            <i class="fa-solid fa-times fa-lg"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Prescription Content -->
+            <div id="prescriptionContent" class="prescription-content p-8 bg-white">
+                <!-- This will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentPrescription = null;
+        // Load prescriptions into a JS array for safe client-side actions
+        const PRESCRIPTIONS = <?php echo json_encode($prescriptions, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+
+        function openPrescriptionModal(prescription) {
+            currentPrescription = prescription;
+            const modal = document.getElementById('prescriptionModal');
+            const content = document.getElementById('prescriptionContent');
+            
+            // Generate prescription content
+            content.innerHTML = generatePrescriptionHTML(prescription);
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closePrescriptionModal() {
+            const modal = document.getElementById('prescriptionModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.body.style.overflow = 'auto';
+            currentPrescription = null;
+        }
+
+        function generatePrescriptionHTML(prescription) {
+            const currentDate = new Date().toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+
+            return `
+            <div style="font-family: Arial, Helvetica, sans-serif; color: #111;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #e5e7eb;padding-bottom:12px;margin-bottom:12px;">
+                    <div style="display:flex;align-items:center;">
+                        <img src="/uploads/logo.png" alt="Clinic Logo" onerror="this.style.display='none'" style="width:56px;height:56px;object-fit:contain;margin-right:12px;">
+                        <div>
+                            <div style="font-family: Georgia, serif; font-size:22px; font-weight:700; color:#111; margin-bottom:2px;">Dr. ${prescription.doctorName}</div>
+                            <div style="font-family: Georgia, serif; font-size:14px; color:#374151;">${prescription.specialty}</div>
+                            <div style="font-family: Georgia, serif; font-size:13px; color:#374151;">${prescription.hospital}</div>
+                            ${prescription.licNo ? `<div style="font-family: Georgia, serif; font-size:12px; color:#374151;">Reg. No: ${prescription.licNo}</div>` : ''}
+                        </div>
+                    </div>
+                    <div style="text-align:right; min-width:140px;">
+                        <div style="font-size:13px; color:#374151;">Date: ${new Date(prescription.date).toLocaleDateString()}</div>
+                        <div style="font-size:13px; color:#374151;">Prescription No: <strong>${String(prescription.prescriptionID).padStart(6, '0')}</strong></div>
+                    </div>
+                </div>
+
+                <div style="font-size:12px; color:#6b7280; margin-bottom:8px;">CarePlus Healthcare Center, 123 Medical District, Dhaka - 1205 | +880-1234-567890</div>
+
+                <div style="margin-bottom:8px;">
+                    <strong>Patient:</strong> ${prescription.patientName} &nbsp;&nbsp; <strong>Patient ID:</strong> ${prescription.patientUserID}
+                </div>
+
+                <div style="display:flex;align-items:flex-start;margin-top:12px;">
+                    <div style="font-size:40px;font-family: Georgia, serif; line-height:1; margin-right:12px;">℞</div>
+                    <div style="flex:1;">
+                        <div style="font-size:16px; color:#111; line-height:1.5; min-height:100px;">
+                            ${prescription.medicineInfo
+                                .split(/,\s*/)
+                                .map(med => `<div style='margin-bottom:6px;'>${med.trim()}</div>`)
+                                .join('')}
+                        </div>
+                    </div>
+                </div>
+
+                ${prescription.instructions ? `
+                <div style="margin-top:12px;">
+                    <strong>Instructions:</strong>
+                    <div style="white-space:pre-line;margin-top:6px;">${prescription.instructions}</div>
+                </div>
+                ` : ''}
+
+                <div style="margin-top:40px;text-align:right;">
+                    <div style="border-top:1px solid #e5e7eb;padding-top:6px;display:inline-block;min-width:200px;">
+                        <div style="font-style:italic;color:#6b7280;">Signature</div>
+                        <div style="font-family: Georgia, serif; font-weight:700;">Dr. ${prescription.doctorName}</div>
+                    </div>
+                </div>
+
+                <div style="margin-top:16px;border-top:1px solid #eee;padding-top:8px;font-size:11px;color:#6b7280;text-align:center;">
+                    This is a computer generated prescription. Valid for 30 days from date of issue.<br>
+                    Generated on: ${currentDate}
+                </div>
+            </div>
+            `;
+        }
+
+        function printPrescription() {
+            window.print();
+        }
+
+        // Open a new window with printable prescription HTML and trigger print (reliable fallback)
+        function openPrintWindowForPrescription(prescription) {
+            try {
+                const printWindow = window.open('', '_blank', 'width=900,height=1100');
+                if (!printWindow) { alert('Unable to open print window. Please allow popups for this site.'); return; }
+                const html = `
+                    <html>
+                    <head>
+                        <title>Prescription - ${prescription.patientName}</title>
+                        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+                        <style>
+                            body { font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #111; }
+                            @media print { @page { margin: 20mm; } }
+                        </style>
+                    </head>
+                    <body>
+                        ${generatePrescriptionHTML(prescription)}
+                        <script>
+                            setTimeout(() => { window.print(); }, 400);
+                            window.onafterprint = function() { window.close(); };
+                        <\/script>
+                    </body>
+                    </html>
+                `;
+                printWindow.document.open();
+                printWindow.document.write(html);
+                printWindow.document.close();
+            } catch (err) {
+                console.error('print window error', err);
+                // fallback: open modal then let user use Print as PDF
+                currentPrescription = prescription;
+                openPrescriptionModal(prescription);
+                alert('Unable to open print window automatically. The prescription has been opened in a modal. Use the Print as PDF button there.');
+            }
+        }
+
+        function downloadModalPDF() {
+            if (!currentPrescription) return;
+            openPrintWindowForPrescription(currentPrescription);
+        }
+
+        function openPrescriptionModalByAppointmentId(appointmentID) {
+            const pres = PRESCRIPTIONS.find(p => Number(p.appointmentID) === Number(appointmentID));
+            if (!pres) {
+                alert('Prescription not found for this appointment.');
+                return;
+            }
+            openPrescriptionModal(pres);
+        }
+    </script>
+
+    <script>
+        // Close modal when clicking outside
+        document.getElementById('prescriptionModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closePrescriptionModal();
+            }
         });
     </script>
 </body>
