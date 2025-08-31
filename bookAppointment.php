@@ -1,108 +1,129 @@
 <?php
-// Redirect to the new doctor booking system
-header("Location: doctorBooking.php");
-exit();
-?>
+session_start();
+$conn = require_once 'config.php';
+date_default_timezone_set('Asia/Dhaka');
 
-// Get filter parameters
-$provider_type = $_GET['provider_type'] ?? 'all';
-$specialty = $_GET['specialty'] ?? '';
-$date_filter = $_GET['date_filter'] ?? '';
+// Protect this page
+if (!isset($_SESSION['userID']) || $_SESSION['role'] !== 'Patient') {
+    header("Location: login.php");
+    exit();
+}
 
-// Build base query for available schedules with providers
-$query = "
-    SELECT 
-        s.scheduleID,
-        s.providerID,
-        s.availableDate,
-        s.startTime,
-        s.endTime,
-        u.Name as providerName,
-        u.role as providerRole,
-        CASE 
-            WHEN u.role = 'Doctor' THEN d.specialty
-            WHEN u.role = 'Nutritionist' THEN n.specialty
-            ELSE 'General'
-        END as specialty,
-        CASE 
-            WHEN u.role = 'Doctor' THEN d.consultationFees
-            WHEN u.role = 'Nutritionist' THEN n.consultationFees
-            ELSE 0
-        END as consultationFees,
-        CASE 
-            WHEN u.role = 'Doctor' THEN d.yearsOfExp
-            WHEN u.role = 'Nutritionist' THEN n.yearsOfExp
-            ELSE 0
-        END as yearsOfExp,
-        CASE 
-            WHEN u.role = 'Doctor' THEN d.hospital
-            ELSE 'Nutrition Clinic'
-        END as workplace
-    FROM schedule s
-    INNER JOIN users u ON s.providerID = u.userID
-    LEFT JOIN doctor d ON u.userID = d.doctorID AND u.role = 'Doctor'
-    LEFT JOIN nutritionist n ON u.userID = n.nutritionistID AND u.role = 'Nutritionist'
-    WHERE s.status = 'Available' 
-    AND s.availableDate >= CURDATE()
-    AND (u.role = 'Doctor' OR u.role = 'Nutritionist')
-";
+$patientID = $_SESSION['userID'];
+$userName = $_SESSION['Name'];
+$userAvatar = strtoupper(substr($userName, 0, 2));
+$successMsg = "";
+$errorMsg = "";
 
-$params = [];
-$param_types = "";
+// --- Handle Booking Submission ---
+if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['book_appointment'])) {
+    
+    // --- FIXED: Check if a schedule slot was selected first ---
+    if (!isset($_POST['scheduleID'])) {
+        $errorMsg = "Please select an available time slot before booking.";
+    } else {
+        $providerID = (int)$_POST['providerID'];
+        $scheduleID = (int)$_POST['scheduleID'];
+        $notes = trim($_POST['notes']);
 
-// Apply filters
-if ($provider_type !== 'all') {
-    if ($provider_type === 'doctor') {
-        $query .= " AND u.role = 'Doctor'";
-    } elseif ($provider_type === 'nutritionist') {
-        $query .= " AND u.role = 'Nutritionist'";
+        $conn->begin_transaction();
+        try {
+            $stmt = $conn->prepare("SELECT availableDate, startTime FROM schedule WHERE scheduleID = ? AND status = 'Available' FOR UPDATE");
+            $stmt->bind_param("i", $scheduleID);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            if ($result->num_rows === 0) {
+                throw new Exception("This time slot is no longer available. Please select another.");
+            }
+            $scheduleDetails = $result->fetch_assoc();
+            $stmt->close();
+
+            $stmt = $conn->prepare("UPDATE schedule SET status = 'Booked' WHERE scheduleID = ?");
+            $stmt->bind_param("i", $scheduleID);
+            $stmt->execute();
+            $stmt->close();
+            
+            $appointmentDateTime = $scheduleDetails['availableDate'] . ' ' . $scheduleDetails['startTime'];
+            $stmt = $conn->prepare("INSERT INTO appointment (patientID, providerID, appointmentDate, status, scheduleID, notes) VALUES (?, ?, ?, 'Scheduled', ?, ?)");
+            $stmt->bind_param("iisis", $patientID, $providerID, $appointmentDateTime, $scheduleID, $notes);
+            $stmt->execute();
+            $newAppointmentID = $stmt->insert_id;
+            $stmt->close();
+
+            $conn->commit();
+            
+            $_SESSION['pending_appointment_id'] = $newAppointmentID;
+            header("Location: payment.php");
+            exit();
+
+        } catch (Exception $e) {
+            $conn->rollback();
+            $errorMsg = $e->getMessage();
+        }
     }
 }
 
-if (!empty($specialty)) {
-    $query .= " AND ((u.role = 'Doctor' AND d.specialty LIKE ?) OR (u.role = 'Nutritionist' AND n.specialty LIKE ?))";
-    $params[] = "%$specialty%";
-    $params[] = "%$specialty%";
-    $param_types .= "ss";
+
+// --- Fetch all Doctors and Nutritionists (with filtering) ---
+$baseQuery = "SELECT u.userID, u.Name, u.role, u.profilePhoto, COALESCE(d.specialty, n.specialty) as specialty, COALESCE(d.consultationFees, n.consultationFees) as fees FROM users u LEFT JOIN doctor d ON u.userID = d.doctorID LEFT JOIN nutritionist n ON u.userID = n.nutritionistID";
+$whereClauses = ["u.role IN ('Doctor', 'Nutritionist')"];
+$params = [];
+$types = "";
+
+$specialtyFilter = $_GET['specialty'] ?? '';
+$dateFilter = $_GET['date'] ?? '';
+
+if (!empty($specialtyFilter)) {
+    $whereClauses[] = "(d.specialty LIKE ? OR n.specialty LIKE ?)";
+    $params[] = "%" . $specialtyFilter . "%";
+    $params[] = "%" . $specialtyFilter . "%";
+    $types .= "ss";
+}
+if (!empty($dateFilter)) {
+    $baseQuery .= " JOIN schedule s ON u.userID = s.providerID ";
+    $whereClauses[] = "s.availableDate = ? AND s.status = 'Available'";
+    $params[] = $dateFilter;
+    $types .= "s";
 }
 
-if (!empty($date_filter)) {
-    $query .= " AND s.availableDate = ?";
-    $params[] = $date_filter;
-    $param_types .= "s";
-}
-
-$query .= " ORDER BY s.availableDate, s.startTime";
-
+$query = $baseQuery . " WHERE " . implode(" AND ", $whereClauses) . " GROUP BY u.userID ORDER BY u.Name ASC";
 $stmt = $conn->prepare($query);
 if (!empty($params)) {
-    $stmt->bind_param($param_types, ...$params);
+    $stmt->bind_param($types, ...$params);
 }
 $stmt->execute();
-$result = $stmt->get_result();
-$schedules = $result->fetch_all(MYSQLI_ASSOC);
+$providers = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
-// Get unique specialties for filter
-$specialtiesQuery = "
-    SELECT DISTINCT specialty 
-    FROM (
-        SELECT specialty FROM doctor WHERE specialty IS NOT NULL AND specialty != ''
-        UNION
-        SELECT specialty FROM nutritionist WHERE specialty IS NOT NULL AND specialty != ''
-    ) as specialties
-    ORDER BY specialty
-";
-$specialtiesResult = $conn->query($specialtiesQuery);
-$specialties = $specialtiesResult->fetch_all(MYSQLI_ASSOC);
+$doctors = array_filter($providers, fn($p) => $p['role'] === 'Doctor');
+$nutritionists = array_filter($providers, fn($p) => $p['role'] === 'Nutritionist');
 
-$conn->close();
+function generateProviderCards($providers) {
+    if (empty($providers)) { return '<p class="text-center text-gray-500 py-10 col-span-full">No providers found matching your criteria.</p>'; }
+    $html = '';
+    foreach($providers as $provider) {
+        $html .= '<div class="provider-card bg-white p-5 rounded-lg shadow-md border flex flex-col">';
+        $html .= '<div class="flex items-center space-x-4 mb-4">';
+        if(!empty($provider['profilePhoto'])) {
+            $html .= '<img src="'.htmlspecialchars($provider['profilePhoto']).'" class="w-16 h-16 rounded-full object-cover">';
+        } else {
+            $html .= '<div class="w-16 h-16 rounded-full bg-dark-orchid text-white flex items-center justify-center font-bold text-2xl">'.htmlspecialchars(strtoupper(substr($provider['Name'], 0, 2))).'</div>';
+        }
+        $html .= '<div><h3 class="text-lg font-bold text-slate-800">'.htmlspecialchars($provider['Name']).'</h3><p class="text-sm text-gray-500">'.htmlspecialchars($provider['role']).'</p></div>';
+        $html .= '</div>';
+        $html .= '<div class="text-sm space-y-2 flex-grow"><p class="text-gray-700"><i class="fa-solid fa-stethoscope w-5 text-gray-400 mr-1"></i><span class="font-semibold">Specialty:</span> '.htmlspecialchars($provider['specialty'] ?? 'N/A').'</p>';
+        $html .= '<p class="text-gray-700"><i class="fa-solid fa-money-bill-wave w-5 text-gray-400 mr-1"></i><span class="font-semibold">Fees:</span> ৳'.htmlspecialchars(number_format($provider['fees'] ?? 0, 2)).'</p></div>';
+        $html .= '<button onclick="viewProviderDetails('.$provider['userID'].')" class="w-full mt-4 py-2 px-4 bg-dark-orchid text-white rounded-md font-semibold hover:bg-purple-700 transition">View Profile & Schedule</button>';
+        $html .= '</div>';
+    }
+    return $html;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Book Appointment - CarePlus</title>
+        <title>Book Appointment - CarePlus</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
@@ -110,302 +131,138 @@ $conn->close();
         body { font-family: 'Inter', sans-serif; }
         .bg-dark-orchid { background-color: #9932CC; }
         .text-dark-orchid { color: #9932CC; }
-        .shadow-orchid-custom { box-shadow: 0 4px 6px -1px rgba(153, 50, 204, 0.1), 0 2px 4px -2px rgba(153, 50, 204, 0.1); }
-        .schedule-card {
-            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-        }
-        .schedule-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px -5px rgba(0, 0, 0, 0.1);
-        }
+        .provider-card { transition: transform 0.2s, box-shadow 0.2s; }
+        .provider-card:hover { transform: translateY(-5px); box-shadow: 0 10px 15px -3px rgba(153,50,204,0.1); }
+        .tab-button { border-bottom: 3px solid transparent; }
+        .tab-button.active { border-bottom-color: #9932CC; color: #9932CC; }
     </style>
 </head>
-<body class="bg-purple-50">
+<body class="bg-gray-100">
     <div class="flex min-h-screen">
-        <!-- Sidebar -->
         <aside class="w-64 bg-white border-r">
-            <div class="p-6">
-                <a href="patientDashboard.php" class="text-2xl font-bold text-dark-orchid">CarePlus</a>
-            </div>
+            <div class="p-6"><a href="#" class="text-2xl font-bold text-dark-orchid">CarePlus</a></div>
             <nav class="px-4 space-y-2">
-                <a href="patientDashboard.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
-                    <i class="fa-solid fa-table-columns w-5"></i>
-                    <span>Dashboard</span>
-                </a>
-                <a href="patientProfile.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
-                    <i class="fa-regular fa-user w-5"></i>
-                    <span>My Profile</span>
-                </a>
-                <a href="patientAppointments.php" class="flex items-center space-x-3 px-4 py-3 bg-purple-100 text-dark-orchid rounded-lg">
-                    <i class="fa-solid fa-calendar-days w-5"></i>
-                    <span>My Appointments</span>
-                </a>
-                <a href="caregiverBooking.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
-                    <i class="fa-solid fa-hands-holding-child w-5"></i>
-                    <span>Caregiver Bookings</span>
-                </a>
-                <a href="patientMedicalHistory.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
-                    <i class="fa-solid fa-file-medical w-5"></i>
-                    <span>Medical History</span>
-                </a>
-                <a href="logout.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg mt-8">
-                    <i class="fa-solid fa-arrow-right-from-bracket w-5"></i>
-                    <span>Logout</span>
-                </a>
+                <a href="patientDashboard.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-table-columns w-5"></i><span>Dashboard</span></a>
+                <a href="patientProfile.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-regular fa-user w-5"></i><span>My Profile</span></a>
+                <a href="bookAppointment.php" class="flex items-center space-x-3 px-4 py-3 bg-purple-100 text-dark-orchid rounded-lg"><i class="fa-solid fa-calendar-plus w-5"></i><span>Book Appointment</span></a>
+                <a href="patientAppointments.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-calendar-days w-5"></i><span>My Appointments</span></a>
+                <a href="caregiverBooking.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-hands-holding-child w-5"></i><span>Caregiver Bookings</span></a>
+                <a href="upload_medical_history.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-file-medical w-5"></i><span>Medical History</span></a>
+                <a href="logout.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg mt-8"><i class="fa-solid fa-arrow-right-from-bracket w-5"></i><span>Logout</span></a>
             </nav>
         </aside>
 
-        <!-- Main Content -->
         <main class="flex-1 p-8">
-            <!-- Header -->
             <header class="flex justify-between items-center mb-8">
-                <div>
-                    <h1 class="text-3xl font-bold text-slate-800">Book Appointment</h1>
-                    <p class="text-gray-600 mt-1">Schedule appointments with doctors and nutritionists</p>
-                </div>
-                <div class="flex items-center space-x-4">
-                    <a href="patientAppointments.php" class="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition-colors">
-                        <i class="fa-solid fa-arrow-left mr-2"></i>
-                        Back to Appointments
-                    </a>
-                    <div class="text-right">
-                        <p class="font-semibold text-slate-700"><?php echo htmlspecialchars($userName); ?></p>
-                        <p class="text-sm text-gray-500">Patient</p>
-                    </div>
-                    <div class="w-12 h-12 rounded-full bg-dark-orchid text-white flex items-center justify-center font-bold text-lg">
-                        <?php echo htmlspecialchars($userAvatar); ?>
-                    </div>
-                </div>
+                <div><h1 class="text-3xl font-bold text-slate-800">Book Appointment</h1><p class="text-gray-600 mt-1">Browse and book appointments with our specialists.</p></div>
             </header>
+            
+            <?php if ($successMsg): ?><div class="mb-6 p-4 bg-green-100 text-green-800 rounded-md"><?php echo $successMsg; ?></div><?php endif; ?>
+            <?php if ($errorMsg): ?><div class="mb-6 p-4 bg-red-100 text-red-800 rounded-md"><?php echo $errorMsg; ?></div><?php endif; ?>
 
-            <!-- Success/Error Messages -->
-            <?php if (!empty($success_message)): ?>
-                <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6" role="alert">
-                    <div class="flex">
-                        <div class="py-1">
-                            <i class="fa-solid fa-check-circle mr-2"></i>
-                            <?php echo htmlspecialchars($success_message); ?>
-                        </div>
-                    </div>
-                </div>
-            <?php endif; ?>
-
-            <?php if (!empty($error_message)): ?>
-                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6" role="alert">
-                    <div class="flex">
-                        <div class="py-1">
-                            <i class="fa-solid fa-exclamation-circle mr-2"></i>
-                            <?php echo htmlspecialchars($error_message); ?>
-                        </div>
-                    </div>
-                </div>
-            <?php endif; ?>
-
-            <!-- Filters -->
-            <div class="bg-white p-6 rounded-lg shadow-orchid-custom mb-8">
-                <h2 class="text-xl font-semibold text-slate-800 mb-4">Filter Appointments</h2>
-                <form method="GET" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Provider Type</label>
-                        <select name="provider_type" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                            <option value="all" <?php echo $provider_type === 'all' ? 'selected' : ''; ?>>All Providers</option>
-                            <option value="doctor" <?php echo $provider_type === 'doctor' ? 'selected' : ''; ?>>Doctors</option>
-                            <option value="nutritionist" <?php echo $provider_type === 'nutritionist' ? 'selected' : ''; ?>>Nutritionists</option>
-                        </select>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Specialty</label>
-                        <select name="specialty" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                            <option value="">All Specialties</option>
-                            <?php foreach ($specialties as $spec): ?>
-                                <option value="<?php echo htmlspecialchars($spec['specialty']); ?>" <?php echo $specialty === $spec['specialty'] ? 'selected' : ''; ?>>
-                                    <?php echo htmlspecialchars($spec['specialty']); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Date</label>
-                        <input type="date" name="date_filter" value="<?php echo htmlspecialchars($date_filter); ?>" 
-                               min="<?php echo date('Y-m-d'); ?>"
-                               class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                    </div>
-                    
-                    <div class="flex items-end">
-                        <button type="submit" class="w-full bg-dark-orchid text-white p-3 rounded-lg hover:bg-purple-700 transition-colors">
-                            <i class="fa-solid fa-filter mr-2"></i>
-                            Apply Filters
-                        </button>
-                    </div>
+            <div class="bg-white p-4 rounded-lg shadow-md mb-6">
+                <form method="GET" class="flex flex-wrap items-end gap-4">
+                    <div><label class="text-sm font-medium">Filter by Specialty</label><input type="text" name="specialty" value="<?php echo htmlspecialchars($specialtyFilter); ?>" placeholder="e.g., Cardiology" class="w-full mt-1 p-2 border rounded-md"></div>
+                    <div><label class="text-sm font-medium">Available on Date</label><input type="date" name="date" value="<?php echo htmlspecialchars($dateFilter); ?>" class="w-full mt-1 p-2 border rounded-md"></div>
+                    <button type="submit" class="px-4 py-2 bg-dark-orchid text-white rounded-md font-semibold">Filter</button>
+                    <a href="bookAppointment.php" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md">Clear</a>
                 </form>
             </div>
-
-            <!-- Available Schedules -->
-            <div class="mb-8">
-                <h2 class="text-2xl font-semibold text-slate-800 mb-6">Available Time Slots</h2>
-                
-                <?php if (empty($schedules)): ?>
-                    <div class="text-center py-12">
-                        <i class="fa-solid fa-calendar-times fa-4x text-gray-400 mb-4"></i>
-                        <h3 class="text-xl font-semibold text-gray-600 mb-2">No Available Slots</h3>
-                        <p class="text-gray-500">Try adjusting your filters to find more appointments.</p>
-                    </div>
-                <?php else: ?>
-                    <div class="grid gap-6">
-                        <?php foreach ($schedules as $schedule): 
-                            $scheduleDate = new DateTime($schedule['availableDate']);
-                            $startTime = new DateTime($schedule['startTime']);
-                            $endTime = new DateTime($schedule['endTime']);
-                            
-                            // Generate time slots (assuming 30-minute slots)
-                            $timeSlots = [];
-                            $currentTime = clone $startTime;
-                            while ($currentTime < $endTime) {
-                                $slotEnd = clone $currentTime;
-                                $slotEnd->add(new DateInterval('PT30M'));
-                                if ($slotEnd <= $endTime) {
-                                    $timeSlots[] = [
-                                        'start' => $currentTime->format('H:i'),
-                                        'end' => $slotEnd->format('H:i'),
-                                        'datetime' => $scheduleDate->format('Y-m-d') . ' ' . $currentTime->format('H:i:s')
-                                    ];
-                                }
-                                $currentTime->add(new DateInterval('PT30M'));
-                            }
-                        ?>
-                            <div class="schedule-card bg-white rounded-lg shadow-orchid-custom p-6">
-                                <div class="flex justify-between items-start mb-4">
-                                    <div class="flex-1">
-                                        <div class="flex items-center mb-2">
-                                            <h3 class="text-xl font-semibold text-slate-800 mr-3">
-                                                Dr. <?php echo htmlspecialchars($schedule['providerName']); ?>
-                                            </h3>
-                                            <span class="bg-purple-100 text-dark-orchid px-3 py-1 rounded-full text-xs font-medium capitalize">
-                                                <?php echo strtolower($schedule['providerRole']); ?>
-                                            </span>
-                                        </div>
-                                        <div class="grid md:grid-cols-2 gap-4 text-gray-600">
-                                            <div class="flex items-center">
-                                                <i class="fa-solid fa-stethoscope mr-2"></i>
-                                                <span><?php echo htmlspecialchars($schedule['specialty']); ?></span>
-                                            </div>
-                                            <div class="flex items-center">
-                                                <i class="fa-solid fa-building mr-2"></i>
-                                                <span><?php echo htmlspecialchars($schedule['workplace']); ?></span>
-                                            </div>
-                                            <div class="flex items-center">
-                                                <i class="fa-solid fa-calendar mr-2"></i>
-                                                <span><?php echo $scheduleDate->format('l, F j, Y'); ?></span>
-                                            </div>
-                                            <div class="flex items-center">
-                                                <i class="fa-solid fa-money-bill mr-2"></i>
-                                                <span>৳<?php echo number_format($schedule['consultationFees'], 0); ?></span>
-                                            </div>
-                                            <div class="flex items-center">
-                                                <i class="fa-solid fa-graduation-cap mr-2"></i>
-                                                <span><?php echo $schedule['yearsOfExp']; ?> years experience</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="border-t border-gray-200 pt-4">
-                                    <h4 class="font-medium text-gray-700 mb-3">Available Time Slots:</h4>
-                                    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-4">
-                                        <?php foreach ($timeSlots as $slot): ?>
-                                            <button onclick="openBookingModal(<?php echo $schedule['scheduleID']; ?>, <?php echo $schedule['providerID']; ?>, '<?php echo $slot['datetime']; ?>', '<?php echo htmlspecialchars($schedule['providerName']); ?>', '<?php echo $slot['start'] . ' - ' . $slot['end']; ?>', '<?php echo $scheduleDate->format('l, F j, Y'); ?>', <?php echo $schedule['consultationFees']; ?>)" 
-                                                    class="bg-blue-100 hover:bg-blue-200 text-blue-800 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-                                                <?php echo $slot['start']; ?> - <?php echo $slot['end']; ?>
-                                            </button>
-                                        <?php endforeach; ?>
-                                    </div>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                <?php endif; ?>
+            
+            <div class="border-b border-gray-200">
+                <nav class="flex space-x-8 -mb-px">
+                    <button onclick="openTab(event, 'doctors')" class="tab-button active whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Doctors (<?php echo count($doctors); ?>)</button>
+                    <button onclick="openTab(event, 'nutritionists')" class="tab-button whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Nutritionists (<?php echo count($nutritionists); ?>)</button>
+                </nav>
             </div>
+
+            <div id="doctors" class="tab-panel mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"><?php echo generateProviderCards($doctors); ?></div>
+            <div id="nutritionists" class="tab-panel mt-6 hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"><?php echo generateProviderCards($nutritionists); ?></div>
         </main>
     </div>
 
-    <!-- Booking Modal -->
-    <div id="bookingModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-        <div class="bg-white rounded-lg shadow-xl max-w-md w-full m-4">
-            <div class="p-6">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-xl font-semibold text-slate-800">Confirm Booking</h3>
-                    <button onclick="closeBookingModal()" class="text-gray-400 hover:text-gray-600">
-                        <i class="fa-solid fa-times fa-lg"></i>
-                    </button>
-                </div>
-                
-                <form method="POST" id="bookingForm">
-                    <input type="hidden" name="action" value="book">
-                    <input type="hidden" name="scheduleID" id="modalScheduleID">
-                    <input type="hidden" name="providerID" id="modalProviderID">
-                    <input type="hidden" name="appointmentDate" id="modalAppointmentDate">
-                    
-                    <div class="space-y-4">
-                        <div class="bg-gray-50 p-4 rounded-lg">
-                            <h4 class="font-medium text-gray-700">Appointment Details:</h4>
-                            <div class="mt-2 space-y-1 text-sm text-gray-600">
-                                <div><strong>Doctor:</strong> <span id="modalProviderName"></span></div>
-                                <div><strong>Date:</strong> <span id="modalDate"></span></div>
-                                <div><strong>Time:</strong> <span id="modalTime"></span></div>
-                                <div><strong>Fee:</strong> ৳<span id="modalFee"></span></div>
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Notes (Optional)</label>
-                            <textarea name="notes" rows="3" 
-                                      placeholder="Describe your symptoms or reason for visit..."
-                                      class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"></textarea>
-                        </div>
-                    </div>
-                    
-                    <div class="flex space-x-3 mt-6">
-                        <button type="button" onclick="closeBookingModal()" 
-                                class="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors">
-                            Cancel
-                        </button>
-                        <button type="submit" 
-                                class="flex-1 bg-dark-orchid text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors">
-                            Book Appointment
-                        </button>
-                    </div>
-                </form>
-            </div>
+    <div id="detailsModal" class="fixed inset-0 bg-black bg-opacity-60 hidden z-50 flex items-center justify-center p-4">
+        <div id="modalContent" class="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+            <div class="p-8 text-center">Loading details...</div>
         </div>
     </div>
 
     <script>
-        function openBookingModal(scheduleID, providerID, appointmentDate, providerName, timeSlot, date, fee) {
-            document.getElementById('modalScheduleID').value = scheduleID;
-            document.getElementById('modalProviderID').value = providerID;
-            document.getElementById('modalAppointmentDate').value = appointmentDate;
-            document.getElementById('modalProviderName').textContent = 'Dr. ' + providerName;
-            document.getElementById('modalDate').textContent = date;
-            document.getElementById('modalTime').textContent = timeSlot;
-            document.getElementById('modalFee').textContent = fee.toLocaleString();
-            
-            document.getElementById('bookingModal').classList.remove('hidden');
-            document.getElementById('bookingModal').classList.add('flex');
+        const modal = document.getElementById('detailsModal');
+        const modalContent = document.getElementById('modalContent');
+
+        function openTab(evt, tabName) {
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+            document.getElementById(tabName).classList.remove('hidden');
+            evt.currentTarget.classList.add('active');
         }
-        
-        function closeBookingModal() {
-            document.getElementById('bookingModal').classList.add('hidden');
-            document.getElementById('bookingModal').classList.remove('flex');
-        }
-        
-        // Close modal when clicking outside
-        document.getElementById('bookingModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeBookingModal();
+
+        function closeModal() { modal.classList.add('hidden'); }
+
+        async function viewProviderDetails(providerId) {
+            modalContent.innerHTML = '<div class="p-8 text-center text-gray-500"><i class="fa-solid fa-spinner fa-spin fa-2x"></i><p class="mt-2">Loading details...</p></div>';
+            modal.classList.remove('hidden');
+
+            try {
+                const response = await fetch(`get_provider_details.php?id=${providerId}`);
+                const data = await response.json();
+                
+                if (data.error) throw new Error(data.error);
+
+                let scheduleHtml = '<p class="text-center text-gray-500 py-4">No available slots found.</p>';
+                if(data.schedule.length > 0) {
+                    scheduleHtml = data.schedule.map(slot => {
+                        const date = new Date(slot.availableDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+                        const startTime = new Date(`1970-01-01T${slot.startTime}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+                        return `<label class="flex items-center p-3 bg-purple-50 rounded-md cursor-pointer hover:bg-purple-100 transition-colors">
+                                    <input type="radio" name="scheduleID" value="${slot.scheduleID}" class="mr-3 h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300" required>
+                                    <div>
+                                        <p class="font-semibold text-gray-800">${date}</p>
+                                        <p class="text-sm text-gray-600">${startTime}</p>
+                                    </div>
+                                </label>`;
+                    }).join('');
+                }
+
+                modalContent.innerHTML = `
+                    <div class="p-6 border-b flex justify-between items-start">
+                        <div class="flex items-center space-x-4">
+                            <img src="${data.profile.profilePhoto || 'placeholder.png'}" class="w-20 h-20 rounded-full object-cover border-2 border-purple-100">
+                            <div>
+                                <h3 class="text-2xl font-bold text-slate-800">${data.profile.Name}</h3>
+                                <p class="text-gray-600">${data.profile.specialty}</p>
+                            </div>
+                        </div>
+                        <button onclick="closeModal()" class="text-2xl text-gray-400 hover:text-gray-600 transition-colors">&times;</button>
+                    </div>
+                    <form method="POST" class="flex-grow flex flex-col overflow-hidden">
+                        <div class="p-6 space-y-6 overflow-y-auto">
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-center">
+                                <div class="bg-gray-50 p-3 rounded-lg"><strong class="block text-gray-500">Experience</strong> ${data.profile.experience || 'N/A'} years</div>
+                                <div class="bg-gray-50 p-3 rounded-lg"><strong class="block text-gray-500">Clinic</strong> ${data.profile.hospital}</div>
+                                <div class="bg-gray-50 p-3 rounded-lg"><strong class="block text-gray-500">Fees</strong> ৳${Number(data.profile.fees).toFixed(2)}</div>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-gray-800 mb-2">Select an Available Slot</h4>
+                                <div class="space-y-3 max-h-48 overflow-y-auto border p-3 rounded-md bg-gray-50">${scheduleHtml}</div>
+                            </div>
+                            <div>
+                                <label for="notes" class="block text-sm font-medium text-gray-700">Notes for the provider (Optional)</label>
+                                <textarea name="notes" id="notes" rows="2" class="w-full mt-1 p-2 border rounded-md" placeholder="e.g., Mention your primary health concern..."></textarea>
+                            </div>
+                        </div>
+                        <div class="bg-gray-100 p-4 mt-auto flex justify-end">
+                            <input type="hidden" name="providerID" value="${providerId}">
+                            <button type="submit" name="book_appointment" class="px-6 py-2 bg-dark-orchid text-white rounded-md font-semibold hover:bg-purple-700">Book Now & Proceed to Pay</button>
+                        </div>
+                    </form>
+                `;
+            } catch (error) {
+                modalContent.innerHTML = `<div class="p-8 text-center"><p class="text-red-500">Error: Could not load provider details.</p><button onclick="closeModal()" class="mt-4 px-4 py-2 bg-gray-200 rounded-md">Close</button></div>`;
+                console.error('Fetch error:', error);
             }
-        });
+        }
     </script>
 </body>
 </html>
