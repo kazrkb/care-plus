@@ -113,7 +113,7 @@ $dateFilter = $_GET['date'] ?? '';
 
 // --- Fetch all Caregivers (with filtering) ---
 $baseQuery = "SELECT u.userID, u.Name, u.profilePhoto, c.careGiverType, c.certifications, c.dailyRate, c.weeklyRate, c.monthlyRate FROM users u JOIN caregiver c ON u.userID = c.careGiverID";
-$whereClauses = ["u.role = 'CareGiver'", "u.verification_status = 'Approved'"];
+$whereClauses = ["u.role = 'CareGiver'"];
 $params = [];
 $types = "";
 
