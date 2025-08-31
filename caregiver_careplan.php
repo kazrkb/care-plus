@@ -778,10 +778,7 @@ $conn->close();
             document.getElementById('deleteModal').classList.remove('hidden');
         }
 
-        // Close delete modal
-        function closeDeleteModal() {
-            document.getElementById('deleteModal').classList.add('hidden');
-        }
+        
 
         // Close modal when clicking outside
         document.getElementById('deleteModal').addEventListener('click', function(e) {
