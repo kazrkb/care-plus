@@ -1,5 +1,7 @@
 <?php
 session_start();
+$conn = require_once 'config.php';
+date_default_timezone_set('Asia/Dhaka');
 
 // Protect this page: allow only logged-in Nutritionists
 if (!isset($_SESSION['userID']) || $_SESSION['role'] !== 'Nutritionist') {
@@ -7,95 +9,78 @@ if (!isset($_SESSION['userID']) || $_SESSION['role'] !== 'Nutritionist') {
     exit();
 }
 
-// --- Database Connection ---
-$conn = require_once 'config.php'; 
-
 $nutritionistID = $_SESSION['userID'];
 $userName = $_SESSION['Name'];
 $userAvatar = strtoupper(substr($userName, 0, 2));
 
-$successMsg = "";
-$errorMsg = "";
+// Fetch dashboard statistics
+$stats = [];
 
-// --- Handle Accept/Deny Actions ---
-if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['appointmentID'])) {
-    $appointmentID = (int)$_POST['appointmentID'];
-    $action = $_POST['action'];
+// Count active diet plans
+$activeQuery = "SELECT COUNT(*) as count FROM dietplan WHERE nutritionistID = ? AND endDate >= CURDATE()";
+$stmt = $conn->prepare($activeQuery);
+$stmt->bind_param("i", $nutritionistID);
+$stmt->execute();
+$stats['active_plans'] = $stmt->get_result()->fetch_assoc()['count'];
+$stmt->close();
 
-    // Verify the appointment belongs to this nutritionist
-    $verifyQuery = "SELECT appointmentID FROM appointment WHERE appointmentID = ? AND providerID = ?";
-    $verifyStmt = $conn->prepare($verifyQuery);
-    $verifyStmt->bind_param("ii", $appointmentID, $nutritionistID);
-    $verifyStmt->execute();
-    $verifyResult = $verifyStmt->get_result();
+// Count completed diet plans
+$completedQuery = "SELECT COUNT(*) as count FROM dietplan WHERE nutritionistID = ? AND endDate < CURDATE()";
+$stmt = $conn->prepare($completedQuery);
+$stmt->bind_param("i", $nutritionistID);
+$stmt->execute();
+$stats['completed_plans'] = $stmt->get_result()->fetch_assoc()['count'];
+$stmt->close();
 
-    if ($verifyResult->num_rows > 0) {
-        $newStatus = '';
-        
-        // Logic for ACCEPTING a request
-        if ($action === 'accept') {
-            $newStatus = 'Scheduled';
+// Count upcoming consultations
+$upcomingQuery = "SELECT COUNT(*) as count FROM appointment WHERE providerID = ? AND appointmentDate >= NOW() AND status = 'Scheduled'";
+$stmt = $conn->prepare($upcomingQuery);
+$stmt->bind_param("i", $nutritionistID);
+$stmt->execute();
+$stats['upcoming_consultations'] = $stmt->get_result()->fetch_assoc()['count'];
+$stmt->close();
 
-            // --- Auto-generate a unique Google Meet link ---
-            $part1 = substr(str_shuffle('abcdefghijklmnopqrstuvwxyz'), 0, 3);
-            $part2 = substr(str_shuffle('abcdefghijklmnopqrstuvwxyz'), 0, 4);
-            $part3 = substr(str_shuffle('abcdefghijklmnopqrstuvwxyz'), 0, 3);
-            $consultationLink = "https://meet.google.com/{$part1}-{$part2}-{$part3}";
-            
-            // Prepare query to update status AND the new consultation link
-            $updateQuery = "UPDATE appointment SET status = ?, consultation_link = ? WHERE appointmentID = ?";
-            $updateStmt = $conn->prepare($updateQuery);
-            $updateStmt->bind_param("ssi", $newStatus, $consultationLink, $appointmentID);
+// Count total transactions
+$transactionQuery = "SELECT COUNT(*) as count FROM transaction t JOIN appointment a ON t.appointmentID = a.appointmentID WHERE a.providerID = ?";
+$stmt = $conn->prepare($transactionQuery);
+$stmt->bind_param("i", $nutritionistID);
+$stmt->execute();
+$stats['total_transactions'] = $stmt->get_result()->fetch_assoc()['count'];
+$stmt->close();
 
-        // Logic for DENYING a request
-        } elseif ($action === 'deny') {
-            $newStatus = 'Denied';
-            
-            // Prepare query to update status only
-            $updateQuery = "UPDATE appointment SET status = ? WHERE appointmentID = ?";
-            $updateStmt = $conn->prepare($updateQuery);
-            $updateStmt->bind_param("si", $newStatus, $appointmentID);
-        }
+// Fetch recent diet plans for quick access
+$recentPlansQuery = "
+    SELECT dp.planID, dp.dietType, dp.startDate, u.Name as patientName, pt.age, pt.gender
+    FROM dietplan dp
+    JOIN appointment a ON dp.appointmentID = a.appointmentID
+    JOIN users u ON a.patientID = u.userID
+    LEFT JOIN patient pt ON u.userID = pt.patientID
+    WHERE dp.nutritionistID = ?
+    ORDER BY dp.startDate DESC
+    LIMIT 5
+";
+$stmt = $conn->prepare($recentPlansQuery);
+$stmt->bind_param("i", $nutritionistID);
+$stmt->execute();
+$recentPlans = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$stmt->close();
 
-        // Execute the prepared statement if it was set
-        if (isset($updateStmt)) {
-            if ($updateStmt->execute()) {
-                $successMsg = "Appointment has been successfully " . strtolower($newStatus) . ".";
-            } else {
-                $errorMsg = "Failed to update appointment status. Please try again.";
-            }
-            $updateStmt->close();
-        }
-    } else {
-        $errorMsg = "Invalid appointment or you do not have permission to modify it.";
-    }
-    $verifyStmt->close();
-}
-
-// --- Fetch New Appointment Requests ---
-$requestsQuery = "
-    SELECT 
-        a.appointmentID, 
-        a.appointmentDate, 
-        a.notes, 
-        u.Name as patientName 
-    FROM appointment a 
-    JOIN users u ON a.patientID = u.userID 
-    WHERE a.providerID = ? AND a.status = 'Requested' 
+// Fetch upcoming appointments for today's agenda
+$todayQuery = "
+    SELECT a.appointmentID, a.appointmentDate, a.notes, u.Name as patientName, pt.age, pt.gender
+    FROM appointment a
+    JOIN users u ON a.patientID = u.userID
+    LEFT JOIN patient pt ON u.userID = pt.patientID
+    WHERE a.providerID = ? AND DATE(a.appointmentDate) = CURDATE() AND a.status = 'Scheduled'
     ORDER BY a.appointmentDate ASC
 ";
-$requestsStmt = $conn->prepare($requestsQuery);
-$requestsStmt->bind_param("i", $nutritionistID);
-$requestsStmt->execute();
-$appointmentRequests = $requestsStmt->get_result()->fetch_all(MYSQLI_ASSOC);
-$requestsStmt->close();
-$conn->close();
+$stmt = $conn->prepare($todayQuery);
+$stmt->bind_param("i", $nutritionistID);
+$stmt->execute();
+$todayAppointments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$stmt->close();
 
-// Helper function to format date
-function formatAppointmentDate($datetime) {
-    $date = new DateTime($datetime);
-    return $date->format('D, M j, Y @ g:i A');
-}
+$conn->close();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -110,126 +95,263 @@ function formatAppointmentDate($datetime) {
         .bg-dark-orchid { background-color: #9932CC; }
         .text-dark-orchid { color: #9932CC; }
         .shadow-orchid-custom { box-shadow: 0 4px 6px -1px rgba(153, 50, 204, 0.1), 0 2px 4px -2px rgba(153, 50, 204, 0.1); }
-        .feature-card { transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; }
-        .feature-card:hover { transform: translateY(-5px); box-shadow: 0 10px 15px -3px rgba(153, 50, 204, 0.15), 0 4px 6px -2px rgba(153, 50, 204, 0.1); }
-        .request-card { transition: box-shadow 0.2s ease-in-out; }
-        .request-card:hover { box-shadow: 0 8px 25px -5px rgba(153, 50, 204, 0.15); }
+        .feature-card {
+            transition: all 0.3s ease;
+            border: 1px solid transparent;
+        }
+        .feature-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 25px rgba(153, 50, 204, 0.2);
+            border-color: #9932CC;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%);
+            transition: all 0.3s ease;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(153, 50, 204, 0.15);
+        }
     </style>
 </head>
 <body class="bg-purple-50">
-     <div class="flex min-h-screen">
-        <aside class="w-64 bg-white border-r">
+    <div class="flex min-h-screen">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-white border-r shadow-sm">
             <div class="p-6">
-                <a href="nutritionistDashboard.php" class="text-2xl font-bold text-dark-orchid">CarePlus</a>
+                <a href="#" class="text-2xl font-bold text-dark-orchid">CarePlus</a>
             </div>
-            <nav class="px-4">
-                <a href="nutritionistDashboard.php" class="flex items-center space-x-3 px-4 py-3 bg-purple-100 text-dark-orchid rounded-lg"><i class="fa-solid fa-table-columns w-5"></i><span>Dashboard</span></a>
-                <a href="nutritionist_profile.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-regular fa-user w-5"></i><span>My Profile</span></a>
-                <a href="nutritionist_schedule.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-calendar-days w-5"></i><span>Provide Schedule</span></a>
-                <a href="nutritionist_consultations.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-laptop-medical w-5"></i><span>Consultations</span></a>
-                <a href="#" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-utensils w-5"></i><span>Diet Plan</span></a>
-                <a href="#" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-file-waveform w-5"></i><span>Patient History</span></a>
-                <a href="#" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-money-bill-wave w-5"></i><span>Transactions</span></a>
-                <a href="logout.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg mt-8"><i class="fa-solid fa-arrow-right-from-bracket w-5"></i><span>Logout</span></a>
+            <nav class="px-4 space-y-1">
+                <a href="nutritionistDashboard.php" class="flex items-center space-x-3 px-4 py-3 bg-purple-100 text-dark-orchid rounded-lg">
+                    <i class="fa-solid fa-table-columns w-5"></i><span>Dashboard</span>
+                </a>
+                <a href="nutritionist_profile.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
+                    <i class="fa-regular fa-user w-5"></i><span>My Profile</span>
+                </a>
+                <a href="nutritionist_schedule.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
+                    <i class="fa-solid fa-calendar-days w-5"></i><span>Schedule</span>
+                </a>
+                <a href="nutritionist_consultations.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
+                    <i class="fa-solid fa-laptop-medical w-5"></i><span>Consultations</span>
+                </a>
+                <a href="nutritionist_view_dietplans.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
+                    <i class="fa-solid fa-utensils w-5"></i><span>Diet Plans</span>
+                </a>
+                <a href="nutritionist_view_history.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
+                    <i class="fa-solid fa-file-waveform w-5"></i><span>Patient History</span>
+                </a>
+                <a href="my_transactions.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
+                    <i class="fa-solid fa-money-bill-wave w-5"></i><span>Transactions</span>
+                </a>
+                <a href="logout.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg mt-8">
+                    <i class="fa-solid fa-arrow-right-from-bracket w-5"></i><span>Logout</span>
+                </a>
             </nav>
         </aside>
 
+        <!-- Main Content -->
         <main class="flex-1 p-8">
+            <!-- Header -->
             <header class="flex justify-between items-center mb-8">
                 <div>
-                    <h1 class="text-3xl font-bold text-slate-800">Nutritionist Dashboard</h1>
-                    <p class="text-gray-600 mt-1">Welcome back, <?php echo htmlspecialchars(explode(' ', $userName)[0]); ?>!</p>
+                    <h1 class="text-3xl font-bold text-slate-800">Welcome Back, <?php echo htmlspecialchars($userName); ?>!</h1>
+                    <p class="text-gray-600 mt-1">Here's your nutrition practice overview for today</p>
                 </div>
                 <div class="flex items-center space-x-4">
                     <div class="text-right">
-                        <p class="font-semibold text-slate-700"><?php echo htmlspecialchars($userName); ?></p>
-                        <p class="text-sm text-gray-500">Nutritionist</p>
+                        <p class="text-sm text-gray-500"><?php echo date('l, F j, Y'); ?></p>
+                        <p class="text-xs text-gray-400"><?php echo date('g:i A'); ?></p>
                     </div>
-                    <div class="w-12 h-12 rounded-full bg-dark-orchid text-white flex items-center justify-center font-bold text-lg"><?php echo htmlspecialchars($userAvatar); ?></div>
+                    <div class="w-12 h-12 rounded-full bg-dark-orchid text-white flex items-center justify-center font-bold text-lg">
+                        <?php echo htmlspecialchars($userAvatar); ?>
+                    </div>
                 </div>
             </header>
 
-            <?php if ($successMsg): ?>
-            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
-                <i class="fa-solid fa-check-circle mr-2"></i><?php echo $successMsg; ?>
-            </div>
-            <?php endif; ?>
-            <?php if ($errorMsg): ?>
-            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
-                <i class="fa-solid fa-exclamation-circle mr-2"></i><?php echo $errorMsg; ?>
-            </div>
-            <?php endif; ?>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                 <a href="#" class="feature-card bg-white p-6 rounded-lg shadow-orchid-custom text-center">
-                    <i class="fa-solid fa-utensils fa-2x text-dark-orchid mb-3"></i>
-                    <h3 class="text-lg font-semibold text-slate-700">Create Diet Plan</h3>
-                    <p class="text-sm text-gray-500">Design nutritional plans</p>
-                </a>
-                 <a href="#" class="feature-card bg-white p-6 rounded-lg shadow-orchid-custom text-center">
-                    <i class="fa-solid fa-file-waveform fa-2x text-dark-orchid mb-3"></i>
-                    <h3 class="text-lg font-semibold text-slate-700">View Patient History</h3>
-                    <p class="text-sm text-gray-500">Access patient records</p>
-                </a>
-                 <a href="nutritionist_schedule.php" class="feature-card bg-white p-6 rounded-lg shadow-orchid-custom text-center">
-                    <i class="fa-solid fa-calendar-days fa-2x text-dark-orchid mb-3"></i>
-                    <h3 class="text-lg font-semibold text-slate-700">Manage Schedule</h3>
-                    <p class="text-sm text-gray-500">Set your availability</p>
-                </a>
-            </div>
-
-            <hr>
-
-            <div class="mt-8">
-                <h2 class="text-2xl font-bold text-slate-800 mb-4">New Appointment Requests</h2>
-                
-                <?php if (empty($appointmentRequests)): ?>
-                <div class="text-center py-12 bg-white rounded-lg shadow-orchid-custom">
-                    <i class="fa-solid fa-check-circle fa-4x text-gray-400 mb-4"></i>
-                    <h3 class="text-lg font-semibold text-gray-600">All Caught Up!</h3>
-                    <p class="text-gray-500">You have no new appointment requests at the moment.</p>
-                </div>
-                <?php else: ?>
-                <div class="space-y-4">
-                    <?php foreach ($appointmentRequests as $request): ?>
-                    <div class="request-card bg-white p-5 rounded-lg shadow-orchid-custom flex items-start justify-between">
-                        <div>
-                            <h3 class="text-lg font-semibold text-slate-800"><?php echo htmlspecialchars($request['patientName']); ?></h3>
-                            <div class="flex items-center space-x-4 text-gray-600 mt-1 mb-3">
-                                <div class="flex items-center space-x-1.5">
-                                    <i class="fa-solid fa-calendar-alt text-sm"></i>
-                                    <span class="text-sm font-medium"><?php echo formatAppointmentDate($request['appointmentDate']); ?></span>
-                                </div>
-                            </div>
-                            <?php if (!empty($request['notes'])): ?>
-                            <div class="bg-gray-50 p-3 rounded-lg max-w-lg">
-                                <p class="text-sm text-gray-700">
-                                    <i class="fa-solid fa-sticky-note mr-1.5"></i>
-                                    <strong>Patient Notes:</strong> <?php echo htmlspecialchars($request['notes']); ?>
-                                </p>
-                            </div>
-                            <?php endif; ?>
-                        </div>
-                        <div class="flex items-center space-x-3 ml-4">
-                            <form method="POST" class="inline-block">
-                                <input type="hidden" name="appointmentID" value="<?php echo $request['appointmentID']; ?>">
-                                <button type="submit" name="action" value="deny" class="px-4 py-2 border border-red-300 text-red-700 rounded-lg text-sm font-medium hover:bg-red-50 transition">
-                                    <i class="fa-solid fa-times mr-1"></i>Deny
-                                </button>
-                            </form>
-                            <form method="POST" class="inline-block">
-                                <input type="hidden" name="appointmentID" value="<?php echo $request['appointmentID']; ?>">
-                                <button type="submit" name="action" value="accept" class="px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition">
-                                    <i class="fa-solid fa-check mr-1"></i>Accept
-                                </button>
-                            </form>
-                        </div>
+            <!-- Statistics Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="stat-card p-6 rounded-2xl shadow-lg flex items-center space-x-4">
+                    <div class="p-4 rounded-xl bg-purple-500 text-white">
+                        <i class="fa-solid fa-chart-pie fa-2x"></i>
                     </div>
-                    <?php endforeach; ?>
+                    <div>
+                        <h3 class="text-2xl font-bold text-purple-900"><?php echo $stats['active_plans']; ?></h3>
+                        <p class="text-purple-700 font-medium">Active Diet Plans</p>
+                    </div>
                 </div>
-                <?php endif; ?>
+
+                <div class="stat-card p-6 rounded-2xl shadow-lg flex items-center space-x-4">
+                    <div class="p-4 rounded-xl bg-green-500 text-white">
+                        <i class="fa-solid fa-check-circle fa-2x"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-2xl font-bold text-purple-900"><?php echo $stats['completed_plans']; ?></h3>
+                        <p class="text-purple-700 font-medium">Completed Plans</p>
+                    </div>
+                </div>
+
+                <div class="stat-card p-6 rounded-2xl shadow-lg flex items-center space-x-4">
+                    <div class="p-4 rounded-xl bg-blue-500 text-white">
+                        <i class="fa-solid fa-calendar-days fa-2x"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-2xl font-bold text-purple-900"><?php echo $stats['upcoming_consultations']; ?></h3>
+                        <p class="text-purple-700 font-medium">Upcoming Consults</p>
+                    </div>
+                </div>
+
+                <div class="stat-card p-6 rounded-2xl shadow-lg flex items-center space-x-4">
+                    <div class="p-4 rounded-xl bg-indigo-500 text-white">
+                        <i class="fa-solid fa-money-bill-wave fa-2x"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-2xl font-bold text-purple-900"><?php echo $stats['total_transactions']; ?></h3>
+                        <p class="text-purple-700 font-medium">Total Transactions</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Dashboard Content -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <!-- Today's Schedule -->
+                <div class="bg-white p-6 rounded-2xl shadow-orchid-custom">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-xl font-bold text-slate-800">Today's Schedule</h2>
+                        <i class="fa-solid fa-calendar-day text-purple-500 text-xl"></i>
+                    </div>
+                    <?php if (empty($todayAppointments)): ?>
+                        <div class="text-center py-8">
+                            <i class="fa-solid fa-calendar-xmark text-gray-400 text-4xl mb-4"></i>
+                            <p class="text-gray-500">No appointments scheduled for today</p>
+                            <a href="nutritionist_schedule.php" class="text-purple-600 hover:text-purple-800 mt-2 inline-block">
+                                Set up your availability →
+                            </a>
+                        </div>
+                    <?php else: ?>
+                        <div class="space-y-4">
+                            <?php foreach($todayAppointments as $appointment): ?>
+                                <div class="flex items-center p-4 bg-purple-50 rounded-xl border-l-4 border-purple-500">
+                                    <div class="flex-1">
+                                        <h4 class="font-semibold text-purple-900">
+                                            <?php echo htmlspecialchars($appointment['patientName']); ?>
+                                        </h4>
+                                        <p class="text-sm text-purple-700">
+                                            <?php echo date('g:i A', strtotime($appointment['appointmentDate'])); ?> • 
+                                            Age: <?php echo $appointment['age'] ?? 'N/A'; ?> • 
+                                            <?php echo $appointment['gender'] ?? 'N/A'; ?>
+                                        </p>
+                                        <?php if ($appointment['notes']): ?>
+                                            <p class="text-xs text-gray-600 mt-1 truncate">
+                                                <?php echo htmlspecialchars($appointment['notes']); ?>
+                                            </p>
+                                        <?php endif; ?>
+                                    </div>
+                                    <a href="nutritionist_consultations.php" class="text-purple-600 hover:text-purple-800">
+                                        <i class="fa-solid fa-arrow-right"></i>
+                                    </a>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <!-- Recent Diet Plans -->
+                <div class="bg-white p-6 rounded-2xl shadow-orchid-custom">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-xl font-bold text-slate-800">Recent Diet Plans</h2>
+                        <i class="fa-solid fa-apple-alt text-green-500 text-xl"></i>
+                    </div>
+                    <?php if (empty($recentPlans)): ?>
+                        <div class="text-center py-8">
+                            <i class="fa-solid fa-utensils text-gray-400 text-4xl mb-4"></i>
+                            <p class="text-gray-500">No diet plans created yet</p>
+                            <a href="nutritionist_consultations.php" class="text-purple-600 hover:text-purple-800 mt-2 inline-block">
+                                Create your first plan →
+                            </a>
+                        </div>
+                    <?php else: ?>
+                        <div class="space-y-4">
+                            <?php foreach($recentPlans as $plan): ?>
+                                <div class="flex items-center p-4 bg-green-50 rounded-xl border-l-4 border-green-500">
+                                    <div class="flex-1">
+                                        <h4 class="font-semibold text-green-900">
+                                            <?php echo htmlspecialchars($plan['patientName']); ?>
+                                        </h4>
+                                        <p class="text-sm text-green-700">
+                                            <?php echo htmlspecialchars($plan['dietType']); ?> • 
+                                            Started: <?php echo date('M j, Y', strtotime($plan['startDate'])); ?>
+                                        </p>
+                                        <p class="text-xs text-gray-600">
+                                            Age: <?php echo $plan['age'] ?? 'N/A'; ?> • <?php echo $plan['gender'] ?? 'N/A'; ?>
+                                        </p>
+                                    </div>
+                                    <a href="nutritionist_view_dietplans.php" class="text-green-600 hover:text-green-800">
+                                        <i class="fa-solid fa-arrow-right"></i>
+                                    </a>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="bg-white p-6 rounded-2xl shadow-orchid-custom">
+                <h2 class="text-xl font-bold text-slate-800 mb-6">Quick Actions</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <a href="nutritionist_consultations.php" class="feature-card p-6 rounded-xl shadow-sm text-center group">
+                        <div class="p-4 mx-auto w-16 h-16 bg-purple-100 rounded-2xl mb-4 flex items-center justify-center group-hover:bg-purple-200 transition-colors">
+                            <i class="fa-solid fa-utensils fa-2x text-dark-orchid"></i>
+                        </div>
+                        <h3 class="text-lg font-semibold text-gray-800">Create Diet Plan</h3>
+                        <p class="text-sm text-gray-600 mt-2">Design personalized nutrition plans</p>
+                    </a>
+
+                    <a href="nutritionist_view_dietplans.php" class="feature-card p-6 rounded-xl shadow-sm text-center group">
+                        <div class="p-4 mx-auto w-16 h-16 bg-green-100 rounded-2xl mb-4 flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                            <i class="fa-solid fa-chart-line fa-2x text-green-600"></i>
+                        </div>
+                        <h3 class="text-lg font-semibold text-gray-800">View Diet Plans</h3>
+                        <p class="text-sm text-gray-600 mt-2">Monitor all created plans</p>
+                    </a>
+
+                    <a href="nutritionist_view_history.php" class="feature-card p-6 rounded-xl shadow-sm text-center group">
+                        <div class="p-4 mx-auto w-16 h-16 bg-blue-100 rounded-2xl mb-4 flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                            <i class="fa-solid fa-file-medical fa-2x text-blue-600"></i>
+                        </div>
+                        <h3 class="text-lg font-semibold text-gray-800">Patient History</h3>
+                        <p class="text-sm text-gray-600 mt-2">Review patient records</p>
+                    </a>
+
+                    <a href="nutritionist_schedule.php" class="feature-card p-6 rounded-xl shadow-sm text-center group">
+                        <div class="p-4 mx-auto w-16 h-16 bg-indigo-100 rounded-2xl mb-4 flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
+                            <i class="fa-solid fa-calendar-days fa-2x text-indigo-600"></i>
+                        </div>
+                        <h3 class="text-lg font-semibold text-gray-800">Set Schedule</h3>
+                        <p class="text-sm text-gray-600 mt-2">Manage availability</p>
+                    </a>
+                </div>
             </div>
         </main>
     </div>
+
+    <script>
+        // Add some interactive elements
+        document.addEventListener('DOMContentLoaded', function() {
+            // Animate statistics on page load
+            const statCards = document.querySelectorAll('.stat-card');
+            statCards.forEach((card, index) => {
+                setTimeout(() => {
+                    card.style.opacity = '0';
+                    card.style.transform = 'translateY(20px)';
+                    card.style.transition = 'all 0.6s ease';
+                    setTimeout(() => {
+                        card.style.opacity = '1';
+                        card.style.transform = 'translateY(0)';
+                    }, 100);
+                }, index * 150);
+            });
+        });
+    </script>
 </body>
 </html>

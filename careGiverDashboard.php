@@ -103,6 +103,7 @@ $conn->close();
                  <div class="text-right">
                     <p class="font-semibold text-slate-700"><?php echo htmlspecialchars($userName); ?></p>
                     <p class="text-sm text-gray-500">CareGiver</p>
+
                 </div>
                 <div class="w-10 h-10 rounded-full bg-dark-orchid text-white flex items-center justify-center font-bold text-lg"><?php echo htmlspecialchars($userAvatar); ?></div>
             </div>
@@ -140,7 +141,6 @@ $conn->close();
                 <h3 class="text-lg font-semibold">Log Progress</h3>
             </a>
         </div>
-
         <!-- Charts Section -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 mt-6">
             <div class="bg-white p-6 rounded-lg shadow-lg">

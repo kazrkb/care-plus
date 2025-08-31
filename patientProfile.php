@@ -20,7 +20,7 @@ $errorMsg = "";
 // Handle form submission for profile update
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $updateType = $_POST['update_type'] ?? 'health';
-    
+
     if ($updateType === 'personal') {
         // Handle personal information update
         $name = trim($_POST['name']);
@@ -28,21 +28,21 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $contactNo = trim($_POST['contactNo']);
         $photoPath = null;
         $photoUploadError = null;
-        
+
         // Handle photo removal
         $removePhoto = isset($_POST['removePhoto']) && $_POST['removePhoto'] === '1';
-        
+
         // Handle photo upload
         if (isset($_FILES['profilePhoto']) && $_FILES['profilePhoto']['error'] === UPLOAD_ERR_OK) {
             $uploadDir = 'uploads/';
             $allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
             $maxSize = 5 * 1024 * 1024; // 5MB
-            
+
             $fileType = $_FILES['profilePhoto']['type'];
             $fileSize = $_FILES['profilePhoto']['size'];
             $fileName = $_FILES['profilePhoto']['name'];
             $fileExt = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-            
+
             // Validate file type
             if (!in_array($fileType, $allowedTypes)) {
                 $photoUploadError = "Only JPG, PNG, WebP, and GIF files are allowed.";
@@ -50,17 +50,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             // Validate file size
             elseif ($fileSize > $maxSize) {
                 $photoUploadError = "File size must be less than 5MB.";
-            }
-            else {
+            } else {
                 // Generate unique filename
                 $newFileName = 'profile_' . $userID . '_' . time() . '.' . $fileExt;
                 $targetPath = $uploadDir . $newFileName;
-                
+
                 // Create uploads directory if it doesn't exist
                 if (!is_dir($uploadDir)) {
                     mkdir($uploadDir, 0777, true);
                 }
-                
+
                 // Move uploaded file
                 if (move_uploaded_file($_FILES['profilePhoto']['tmp_name'], $targetPath)) {
                     $photoPath = $targetPath;
@@ -69,7 +68,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 }
             }
         }
-        
+
         // Validate email format
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $errorMsg = "Please enter a valid email address.";
@@ -82,7 +81,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $emailCheckStmt->bind_param("si", $email, $userID);
             $emailCheckStmt->execute();
             $emailCheckResult = $emailCheckStmt->get_result();
-            
+
             if ($emailCheckResult->num_rows > 0) {
                 $errorMsg = "This email address is already taken by another user.";
             } else {
@@ -103,7 +102,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     $updateUserStmt = $conn->prepare($updateUserQuery);
                     $updateUserStmt->bind_param("sssi", $name, $email, $contactNo, $userID);
                 }
-                
+
                 if ($updateUserStmt->execute()) {
                     $message = "Personal information updated successfully!";
                     if ($photoPath) {
@@ -116,7 +115,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     $_SESSION['Name'] = $name;
                     $userName = $name;
                     $userAvatar = strtoupper(substr($userName, 0, 2));
-                    
+
                     // Refresh user info to get updated photo
                     $userQuery = "SELECT Name, email, contactNo, profilePhoto FROM Users WHERE userID = ?";
                     $userStmt = $conn->prepare($userQuery);
@@ -187,6 +186,7 @@ $conn->close();
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -195,18 +195,30 @@ $conn->close();
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <style>
-        body { font-family: 'Inter', sans-serif; }
-        .bg-dark-orchid { background-color: #9932CC; }
-        .text-dark-orchid { color: #9932CC; }
-        .shadow-orchid-custom { box-shadow: 0 4px 6px -1px rgba(153, 50, 204, 0.1), 0 2px 4px -2px rgba(153, 50, 204, 0.1); }
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .bg-dark-orchid {
+            background-color: #9932CC;
+        }
+
+        .text-dark-orchid {
+            color: #9932CC;
+        }
+
+        .shadow-orchid-custom {
+            box-shadow: 0 4px 6px -1px rgba(153, 50, 204, 0.1), 0 2px 4px -2px rgba(153, 50, 204, 0.1);
+        }
     </style>
 </head>
+
 <body class="bg-purple-50">
     <div class="flex min-h-screen">
         <!-- Sidebar -->
         <aside class="w-64 bg-white border-r">
             <div class="p-6">
-                <a href="#" class="text-2xl font-bold text-dark-orchid">CarePlus</a>
+                <a href="patientDashboard.php" class="text-2xl font-bold text-dark-orchid">CarePlus</a>
             </div>
             <nav class="px-4 space-y-2">
                 <a href="patientDashboard.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
@@ -221,11 +233,17 @@ $conn->close();
                     <i class="fa-solid fa-calendar-days w-5"></i>
                     <span>My Appointments</span>
                 </a>
-                <a href="#" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
+
+                <a href="caregiverBooking.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
                     <i class="fa-solid fa-hands-holding-child w-5"></i>
-                    <span>My Caregiver Bookings</span>
+                    <span>Caregiver Bookings</span>
                 </a>
-                <a href="#" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
+                <a href="upload_medical_history.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
+                    <i class="fa-solid fa-file-lines w-5"></i>
+                    <span>Medical History</span>
+                </a>
+
+                <a href="patientMedicalHistory.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
                     <i class="fa-solid fa-file-medical w-5"></i>
                     <span>Medical History</span>
                 </a>
@@ -263,15 +281,15 @@ $conn->close();
 
             <!-- Messages -->
             <?php if ($successMsg): ?>
-            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
-                <i class="fa-solid fa-check-circle mr-2"></i><?php echo $successMsg; ?>
-            </div>
+                <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
+                    <i class="fa-solid fa-check-circle mr-2"></i><?php echo $successMsg; ?>
+                </div>
             <?php endif; ?>
 
             <?php if ($errorMsg): ?>
-            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
-                <i class="fa-solid fa-exclamation-circle mr-2"></i><?php echo $errorMsg; ?>
-            </div>
+                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+                    <i class="fa-solid fa-exclamation-circle mr-2"></i><?php echo $errorMsg; ?>
+                </div>
             <?php endif; ?>
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -280,7 +298,7 @@ $conn->close();
                     <h3 class="text-xl font-bold text-slate-800 mb-6">Personal Information</h3>
                     <form method="POST" enctype="multipart/form-data" class="space-y-4">
                         <input type="hidden" name="update_type" value="personal">
-                        
+
                         <!-- Current Profile Photo Display -->
                         <div class="flex items-center space-x-4 mb-4">
                             <div class="w-20 h-20 rounded-full overflow-hidden">
@@ -299,24 +317,24 @@ $conn->close();
                                 </p>
                             </div>
                         </div>
-                        
+
                         <!-- Profile Photo Upload -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Upload New Profile Photo</label>
                             <input type="file" name="profilePhoto" accept="image/jpeg,image/png,image/webp,image/gif" class="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
                             <p class="text-xs text-gray-500 mt-1">Accepted formats: JPG, PNG, WebP, GIF. Max size: 5MB</p>
-                            
+
                             <!-- Remove photo option (only show if user has a photo) -->
                             <?php if ($userInfo['profilePhoto']): ?>
-                            <div class="mt-2">
-                                <label class="flex items-center space-x-2">
-                                    <input type="checkbox" name="removePhoto" value="1" class="rounded border-gray-300 text-purple-600 focus:ring-purple-500">
-                                    <span class="text-sm text-gray-600">Remove current profile photo</span>
-                                </label>
-                            </div>
+                                <div class="mt-2">
+                                    <label class="flex items-center space-x-2">
+                                        <input type="checkbox" name="removePhoto" value="1" class="rounded border-gray-300 text-purple-600 focus:ring-purple-500">
+                                        <span class="text-sm text-gray-600">Remove current profile photo</span>
+                                    </label>
+                                </div>
                             <?php endif; ?>
                         </div>
-                        
+
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Full Name</label>
                             <input type="text" name="name" value="<?php echo htmlspecialchars($userInfo['Name'] ?? ''); ?>" class="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" required minlength="2" maxlength="100">
@@ -374,52 +392,53 @@ $conn->close();
 
             <!-- BMI Calculation -->
             <?php if ($patientInfo && $patientInfo['height'] && $patientInfo['weight']): ?>
-            <?php 
-            $heightInMeters = $patientInfo['height'] / 100;
-            $bmi = round($patientInfo['weight'] / ($heightInMeters * $heightInMeters), 1);
-            $bmiCategory = '';
-            $bmiColor = '';
-            $bmiIcon = '';
-            if ($bmi < 18.5) { 
-                $bmiCategory = 'Underweight'; 
-                $bmiColor = 'text-blue-600'; 
-                $bmiIcon = 'fa-arrow-down';
-            } elseif ($bmi < 25) { 
-                $bmiCategory = 'Normal'; 
-                $bmiColor = 'text-green-600'; 
-                $bmiIcon = 'fa-check';
-            } elseif ($bmi < 30) { 
-                $bmiCategory = 'Overweight'; 
-                $bmiColor = 'text-yellow-600'; 
-                $bmiIcon = 'fa-arrow-up';
-            } else { 
-                $bmiCategory = 'Obese'; 
-                $bmiColor = 'text-red-600'; 
-                $bmiIcon = 'fa-exclamation-triangle';
-            }
-            ?>
-            <div class="mt-8 bg-white p-6 rounded-lg shadow-orchid-custom">
-                <h3 class="text-xl font-bold text-slate-800 mb-6">Health Metrics</h3>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="text-center p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
-                        <i class="fa-solid fa-calculator fa-2x text-purple-600 mb-2"></i>
-                        <p class="text-gray-700 font-medium">BMI</p>
-                        <p class="text-2xl font-bold text-slate-800"><?php echo $bmi; ?></p>
-                    </div>
-                    <div class="text-center p-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg border border-blue-200">
-                        <i class="fa-solid <?php echo $bmiIcon; ?> fa-2x <?php echo $bmiColor; ?> mb-2"></i>
-                        <p class="text-gray-700 font-medium">Category</p>
-                        <p class="text-lg font-bold <?php echo $bmiColor; ?>"><?php echo $bmiCategory; ?></p>
-                    </div>
-                    <div class="text-center p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
-                        <i class="fa-solid fa-heart fa-2x text-green-600 mb-2"></i>
-                        <p class="text-gray-700 font-medium">Status</p>
-                        <p class="text-lg font-bold text-green-600">Healthy</p>
+                <?php
+                $heightInMeters = $patientInfo['height'] / 100;
+                $bmi = round($patientInfo['weight'] / ($heightInMeters * $heightInMeters), 1);
+                $bmiCategory = '';
+                $bmiColor = '';
+                $bmiIcon = '';
+                if ($bmi < 18.5) {
+                    $bmiCategory = 'Underweight';
+                    $bmiColor = 'text-blue-600';
+                    $bmiIcon = 'fa-arrow-down';
+                } elseif ($bmi < 25) {
+                    $bmiCategory = 'Normal';
+                    $bmiColor = 'text-green-600';
+                    $bmiIcon = 'fa-check';
+                } elseif ($bmi < 30) {
+                    $bmiCategory = 'Overweight';
+                    $bmiColor = 'text-yellow-600';
+                    $bmiIcon = 'fa-arrow-up';
+                } else {
+                    $bmiCategory = 'Obese';
+                    $bmiColor = 'text-red-600';
+                    $bmiIcon = 'fa-exclamation-triangle';
+                }
+                ?>
+                <div class="mt-8 bg-white p-6 rounded-lg shadow-orchid-custom">
+                    <h3 class="text-xl font-bold text-slate-800 mb-6">Health Metrics</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="text-center p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
+                            <i class="fa-solid fa-calculator fa-2x text-purple-600 mb-2"></i>
+                            <p class="text-gray-700 font-medium">BMI</p>
+                            <p class="text-2xl font-bold text-slate-800"><?php echo $bmi; ?></p>
+                        </div>
+                        <div class="text-center p-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg border border-blue-200">
+                            <i class="fa-solid <?php echo $bmiIcon; ?> fa-2x <?php echo $bmiColor; ?> mb-2"></i>
+                            <p class="text-gray-700 font-medium">Category</p>
+                            <p class="text-lg font-bold <?php echo $bmiColor; ?>"><?php echo $bmiCategory; ?></p>
+                        </div>
+                        <div class="text-center p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
+                            <i class="fa-solid fa-heart fa-2x text-green-600 mb-2"></i>
+                            <p class="text-gray-700 font-medium">Status</p>
+                            <p class="text-lg font-bold text-green-600">Healthy</p>
+                        </div>
                     </div>
                 </div>
-            </div>
             <?php endif; ?>
         </main>
     </div>
 </body>
+
 </html>

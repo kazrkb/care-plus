@@ -7,216 +7,102 @@ if (!isset($_SESSION['userID']) || $_SESSION['role'] !== 'Patient') {
     exit();
 }
 
-// --- Database Connection ---
+// Database Connection
 $conn = require_once 'config.php';
 
 $userName = $_SESSION['Name'];
 $userID = $_SESSION['userID'];
 $userAvatar = strtoupper(substr($userName, 0, 2));
 
-$successMsg = "";
-$errorMsg = "";
-
-// Handle appointment request submission
-if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['action']) && $_POST['action'] === 'request_appointment') {
-    $providerID = (int)$_POST['providerID'];
-    $appointmentDate = $_POST['appointmentDate'];
-    $appointmentTime = $_POST['appointmentTime'];
-    $notes = trim($_POST['notes']);
-    
-    // Combine date and time
-    $appointmentDateTime = $appointmentDate . ' ' . $appointmentTime;
-    
-    // Validate that the appointment is in the future
-    if (strtotime($appointmentDateTime) <= time()) {
-        $errorMsg = "Please select a future date and time for your appointment.";
-    } else {
-        // Check if provider exists and is available
-        $providerQuery = "SELECT u.userID, u.Name, u.role FROM users u WHERE u.userID = ? AND u.role IN ('Doctor', 'Nutritionist')";
-        $providerStmt = $conn->prepare($providerQuery);
-        $providerStmt->bind_param("i", $providerID);
-        $providerStmt->execute();
-        $providerResult = $providerStmt->get_result();
-        
-        if ($providerResult->num_rows > 0) {
-            // Insert appointment request
-            $insertQuery = "INSERT INTO appointment (patientID, providerID, appointmentDate, status, notes) VALUES (?, ?, ?, 'Requested', ?)";
-            $insertStmt = $conn->prepare($insertQuery);
-            $insertStmt->bind_param("iiss", $userID, $providerID, $appointmentDateTime, $notes);
-            
-            if ($insertStmt->execute()) {
-                $provider = $providerResult->fetch_assoc();
-                $successMsg = "Appointment request sent successfully to " . htmlspecialchars($provider['Name']) . "! You will be notified once it's approved.";
-            } else {
-                $errorMsg = "Failed to submit appointment request. Please try again.";
-            }
-            $insertStmt->close();
-        } else {
-            $errorMsg = "Selected provider is not available.";
-        }
-        $providerStmt->close();
-    }
-}
-
 // Handle appointment cancellation
-if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['action']) && $_POST['action'] === 'cancel') {
-    $appointmentID = (int)$_POST['appointmentID'];
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'cancel') {
+    $appointmentID = $_POST['appointmentID'];
     
-    // Verify that this appointment belongs to the current patient and is not already canceled
-    $verifyQuery = "SELECT appointmentID, status, appointmentDate FROM Appointment WHERE appointmentID = ? AND patientID = ? AND status != 'Canceled'";
-    $verifyStmt = $conn->prepare($verifyQuery);
-    $verifyStmt->bind_param("ii", $appointmentID, $userID);
-    $verifyStmt->execute();
-    $verifyResult = $verifyStmt->get_result();
+    // Update appointment status to canceled
+    $cancelQuery = "UPDATE appointment SET status = 'Canceled' WHERE appointmentID = ? AND patientID = ?";
+    $cancelStmt = $conn->prepare($cancelQuery);
+    $cancelStmt->bind_param("ii", $appointmentID, $userID);
     
-    if ($verifyResult->num_rows > 0) {
-        $appointment = $verifyResult->fetch_assoc();
+    if ($cancelStmt->execute()) {
+        // Update associated schedule back to available if it exists
+        $updateScheduleQuery = "UPDATE schedule s 
+                               INNER JOIN appointment a ON s.scheduleID = a.scheduleID 
+                               SET s.status = 'Available' 
+                               WHERE a.appointmentID = ?";
+        $updateScheduleStmt = $conn->prepare($updateScheduleQuery);
+        $updateScheduleStmt->bind_param("i", $appointmentID);
+        $updateScheduleStmt->execute();
         
-        // Check if appointment is in the future
-        if (strtotime($appointment['appointmentDate']) > time()) {
-            // Update appointment status to 'Canceled'
-            $cancelQuery = "UPDATE Appointment SET status = 'Canceled' WHERE appointmentID = ?";
-            $cancelStmt = $conn->prepare($cancelQuery);
-            $cancelStmt->bind_param("i", $appointmentID);
-            
-            if ($cancelStmt->execute()) {
-                $successMsg = "Appointment has been successfully canceled.";
-            } else {
-                $errorMsg = "Failed to cancel appointment. Please try again.";
-            }
-            $cancelStmt->close();
-        } else {
-            $errorMsg = "Cannot cancel past appointments.";
-        }
+        $success_message = "Appointment canceled successfully.";
     } else {
-        $errorMsg = "Appointment not found or cannot be canceled.";
+        $error_message = "Failed to cancel appointment.";
     }
-    $verifyStmt->close();
 }
 
-// Get filter parameter
-$filter = isset($_GET['filter']) ? $_GET['filter'] : 'all';
-
-// Build query based on filter
-$baseQuery = "SELECT a.appointmentID, a.appointmentDate, a.status, a.consultation_link, a.notes, 
-              u.Name as providerName, u.role as providerRole 
-              FROM Appointment a 
-              LEFT JOIN Users u ON a.providerID = u.userID 
-              WHERE a.patientID = ?";
-
-switch ($filter) {
-    case 'upcoming':
-        $query = $baseQuery . " AND a.appointmentDate >= NOW() AND a.status IN ('Scheduled', 'Requested') AND a.status != 'Canceled' ORDER BY a.appointmentDate ASC";
-        break;
-    case 'requested':
-        $query = $baseQuery . " AND a.status = 'Requested' ORDER BY a.appointmentDate ASC";
-        break;
-    case 'past':
-        $query = $baseQuery . " AND a.appointmentDate < NOW() AND a.status IN ('Completed', 'Denied') ORDER BY a.appointmentDate DESC";
-        break;
-    case 'canceled':
-        $query = $baseQuery . " AND a.status = 'Canceled' ORDER BY a.appointmentDate DESC";
-        break;
-    default:
-        $query = $baseQuery . " ORDER BY a.appointmentDate DESC";
-}
-
-$stmt = $conn->prepare($query);
-$stmt->bind_param("i", $userID);
-$stmt->execute();
-$appointments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-
-// Get appointment counts for filter tabs
-$countsQuery = "SELECT 
-    COUNT(*) as total,
-    SUM(CASE WHEN appointmentDate >= NOW() AND status IN ('Scheduled', 'Requested') AND status != 'Canceled' THEN 1 ELSE 0 END) as upcoming,
-    SUM(CASE WHEN status = 'Requested' THEN 1 ELSE 0 END) as requested,
-    SUM(CASE WHEN appointmentDate < NOW() AND status IN ('Completed', 'Denied') THEN 1 ELSE 0 END) as past,
-    SUM(CASE WHEN status = 'Canceled' THEN 1 ELSE 0 END) as canceled
-    FROM Appointment WHERE patientID = ?";
-$countsStmt = $conn->prepare($countsQuery);
-$countsStmt->bind_param("i", $userID);
-$countsStmt->execute();
-$counts = $countsStmt->get_result()->fetch_assoc();
-
-// Get available providers (doctors and nutritionists)
-$providersQuery = "
-    SELECT u.userID, u.Name, u.role, d.specialty, d.consultationFees, 'Doctor' as provider_type
-    FROM users u 
-    JOIN doctor d ON u.userID = d.doctorID 
-    WHERE u.role = 'Doctor'
-    UNION
-    SELECT u.userID, u.Name, u.role, n.specialty, n.consultationFees, 'Nutritionist' as provider_type
-    FROM users u 
-    JOIN nutritionist n ON u.userID = n.nutritionistID 
-    WHERE u.role = 'Nutritionist'
-    ORDER BY provider_type, Name
+// Get all appointments for the patient
+$appointmentsQuery = "
+    SELECT 
+        a.appointmentID,
+        a.appointmentDate,
+        a.status,
+        a.consultation_link,
+        a.notes,
+        u.Name as providerName,
+        u.role as providerRole,
+        CASE 
+            WHEN u.role = 'Doctor' THEN d.specialty
+            WHEN u.role = 'Nutritionist' THEN n.specialty
+            ELSE 'N/A'
+        END as specialty,
+        CASE 
+            WHEN u.role = 'Doctor' THEN d.consultationFees
+            WHEN u.role = 'Nutritionist' THEN n.consultationFees
+            ELSE 0
+        END as consultationFees
+    FROM appointment a
+    INNER JOIN users u ON a.providerID = u.userID
+    LEFT JOIN doctor d ON u.userID = d.doctorID AND u.role = 'Doctor'
+    LEFT JOIN nutritionist n ON u.userID = n.nutritionistID AND u.role = 'Nutritionist'
+    WHERE a.patientID = ?
+    ORDER BY a.appointmentDate DESC
 ";
 
-$providersStmt = $conn->prepare($providersQuery);
-$providersStmt->execute();
-$providers = $providersStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$appointmentsStmt = $conn->prepare($appointmentsQuery);
+$appointmentsStmt->bind_param("i", $userID);
+$appointmentsStmt->execute();
+$appointmentsResult = $appointmentsStmt->get_result();
+$appointments = $appointmentsResult->fetch_all(MYSQLI_ASSOC);
+
+// Get prescriptions for completed appointments
+$prescriptionsQuery = "
+    SELECT 
+        p.prescriptionID,
+        p.`medicineNames-dosages` as medicineInfo,
+        p.instructions,
+        p.date,
+        p.appointmentID,
+        u.Name as doctorName,
+        d.specialty,
+        d.hospital,
+        d.licNo,
+        pat.Name as patientName,
+        pat.userID as patientUserID
+    FROM prescription p
+    INNER JOIN appointment a ON p.appointmentID = a.appointmentID
+    INNER JOIN users u ON p.doctorID = u.userID
+    INNER JOIN doctor d ON u.userID = d.doctorID
+    INNER JOIN users pat ON a.patientID = pat.userID
+    WHERE a.patientID = ? AND a.status = 'Completed'
+    ORDER BY p.date DESC
+";
+
+$prescriptionsStmt = $conn->prepare($prescriptionsQuery);
+$prescriptionsStmt->bind_param("i", $userID);
+$prescriptionsStmt->execute();
+$prescriptionsResult = $prescriptionsStmt->get_result();
+$prescriptions = $prescriptionsResult->fetch_all(MYSQLI_ASSOC);
 
 $conn->close();
-
-// Generate time slots (9 AM to 5 PM)
-function generateTimeSlots() {
-    $slots = [];
-    for ($hour = 9; $hour <= 17; $hour++) {
-        $slots[] = sprintf("%02d:00", $hour);
-        if ($hour < 17) {
-            $slots[] = sprintf("%02d:30", $hour);
-        }
-    }
-    return $slots;
-}
-
-$timeSlots = generateTimeSlots();
-
-// Helper function to format status
-function getStatusBadge($status) {
-    switch (strtolower($status)) {
-        case 'requested':
-            return '<span class="px-2 py-1 text-xs font-semibold bg-yellow-100 text-yellow-800 rounded-full">Requested</span>';
-        case 'scheduled':
-            return '<span class="px-2 py-1 text-xs font-semibold bg-blue-100 text-blue-800 rounded-full">Scheduled</span>';
-        case 'completed':
-            return '<span class="px-2 py-1 text-xs font-semibold bg-green-100 text-green-800 rounded-full">Completed</span>';
-        case 'canceled':
-            return '<span class="px-2 py-1 text-xs font-semibold bg-red-100 text-red-800 rounded-full">Canceled</span>';
-        case 'denied':
-            return '<span class="px-2 py-1 text-xs font-semibold bg-red-100 text-red-800 rounded-full">Denied</span>';
-        case 'in-progress':
-            return '<span class="px-2 py-1 text-xs font-semibold bg-purple-100 text-purple-800 rounded-full">In Progress</span>';
-        default:
-            return '<span class="px-2 py-1 text-xs font-semibold bg-gray-100 text-gray-800 rounded-full">' . htmlspecialchars($status) . '</span>';
-    }
-}
-
-// Helper function to format date
-function formatAppointmentDate($datetime) {
-    $date = new DateTime($datetime);
-    $now = new DateTime();
-    $diff = $now->diff($date);
-    
-    if ($date > $now) {
-        if ($diff->days == 0) {
-            return 'Today at ' . $date->format('g:i A');
-        } elseif ($diff->days == 1) {
-            return 'Tomorrow at ' . $date->format('g:i A');
-        } else {
-            return $date->format('M j, Y \a\t g:i A');
-        }
-    } else {
-        if ($diff->days == 0) {
-            return 'Today at ' . $date->format('g:i A');
-        } elseif ($diff->days == 1) {
-            return 'Yesterday at ' . $date->format('g:i A');
-        } else {
-            return $date->format('M j, Y \a\t g:i A');
-        }
-    }
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -237,43 +123,36 @@ function formatAppointmentDate($datetime) {
         }
         .appointment-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px -5px rgba(153, 50, 204, 0.15);
+            box-shadow: 0 8px 25px -5px rgba(0, 0, 0, 0.1);
         }
-        .cancel-form {
-            display: inline-block;
+        
+        /* Modal styles */
+        .modal-overlay {
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(2px);
         }
-        .cancel-btn:hover {
-            background-color: #fef2f2;
-            border-color: #fca5a5;
+        
+        /* Prescription styles */
+        .prescription-header {
+            background: linear-gradient(135deg, #9932CC 0%, #DA70D6 100%);
+        }
+        
+        .prescription-content {
+            font-family: 'Times New Roman', Times, serif;
+        }
+        
+        @media print {
+            .no-print { display: none !important; }
+            body { margin: 0; background: white; }
         }
     </style>
-    <script>
-        function confirmCancel(appointmentId, providerName, dateTime) {
-            const confirmMsg = `Are you sure you want to cancel your appointment with ${providerName} on ${dateTime}?\n\nThis action cannot be undone.`;
-            return confirm(confirmMsg);
-        }
-
-        // Auto-hide success/error messages after 5 seconds
-        document.addEventListener('DOMContentLoaded', function() {
-            const alerts = document.querySelectorAll('.alert-auto-hide');
-            alerts.forEach(function(alert) {
-                setTimeout(function() {
-                    alert.style.transition = 'opacity 0.5s';
-                    alert.style.opacity = '0';
-                    setTimeout(function() {
-                        alert.remove();
-                    }, 500);
-                }, 5000);
-            });
-        });
-    </script>
 </head>
 <body class="bg-purple-50">
     <div class="flex min-h-screen">
         <!-- Sidebar -->
         <aside class="w-64 bg-white border-r">
             <div class="p-6">
-                <a href="#" class="text-2xl font-bold text-dark-orchid">CarePlus</a>
+                <a href="patientDashboard.php" class="text-2xl font-bold text-dark-orchid">CarePlus</a>
             </div>
             <nav class="px-4 space-y-2">
                 <a href="patientDashboard.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
@@ -288,11 +167,11 @@ function formatAppointmentDate($datetime) {
                     <i class="fa-solid fa-calendar-days w-5"></i>
                     <span>My Appointments</span>
                 </a>
-                <a href="my_bookings.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
+                <a href="caregiverBooking.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
                     <i class="fa-solid fa-hands-holding-child w-5"></i>
-                    <span>My Caregiver Bookings</span>
+                    <span>Caregiver Bookings</span>
                 </a>
-                <a href="#" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
+                <a href="patientMedicalHistory.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
                     <i class="fa-solid fa-file-medical w-5"></i>
                     <span>Medical History</span>
                 </a>
@@ -309,12 +188,13 @@ function formatAppointmentDate($datetime) {
             <header class="flex justify-between items-center mb-8">
                 <div>
                     <h1 class="text-3xl font-bold text-slate-800">My Appointments</h1>
-                    <p class="text-gray-600 mt-1">View and manage your healthcare appointments</p>
+                    <p class="text-gray-600 mt-1">Manage your appointments with doctors and nutritionists</p>
                 </div>
                 <div class="flex items-center space-x-4">
-                    <button onclick="openRequestModal()" class="bg-dark-orchid text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition">
-                        <i class="fa-solid fa-calendar-plus mr-2"></i>New Appointment
-                    </button>
+                    <a href="bookAppointment.php" class="bg-dark-orchid text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors">
+                        <i class="fa-solid fa-plus mr-2"></i>
+                        Book New Appointment
+                    </a>
                     <div class="text-right">
                         <p class="font-semibold text-slate-700"><?php echo htmlspecialchars($userName); ?></p>
                         <p class="text-sm text-gray-500">Patient</p>
@@ -325,334 +205,426 @@ function formatAppointmentDate($datetime) {
                 </div>
             </header>
 
-            <!-- Messages -->
-            <?php if ($successMsg): ?>
-            <div class="alert-auto-hide bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
-                <i class="fa-solid fa-check-circle mr-2"></i><?php echo $successMsg; ?>
-            </div>
+            <!-- Success/Error Messages -->
+            <?php if (isset($success_message)): ?>
+                <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6" role="alert">
+                    <div class="flex">
+                        <div class="py-1">
+                            <i class="fa-solid fa-check-circle mr-2"></i>
+                            <?php echo htmlspecialchars($success_message); ?>
+                        </div>
+                    </div>
+                </div>
             <?php endif; ?>
 
-            <?php if ($errorMsg): ?>
-            <div class="alert-auto-hide bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
-                <i class="fa-solid fa-exclamation-circle mr-2"></i><?php echo $errorMsg; ?>
-            </div>
+            <?php if (isset($error_message)): ?>
+                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6" role="alert">
+                    <div class="flex">
+                        <div class="py-1">
+                            <i class="fa-solid fa-exclamation-circle mr-2"></i>
+                            <?php echo htmlspecialchars($error_message); ?>
+                        </div>
+                    </div>
+                </div>
             <?php endif; ?>
 
-            <!-- Filter Tabs -->
+            <!-- Appointment Tabs -->
             <div class="mb-6">
                 <div class="border-b border-gray-200">
-                    <nav class="-mb-px flex space-x-8">
-                        <a href="?filter=all" class="<?php echo $filter == 'all' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'; ?> whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
-                            All Appointments
-                            <span class="ml-2 bg-gray-100 text-gray-900 py-0.5 px-2.5 rounded-full text-xs"><?php echo $counts['total']; ?></span>
-                        </a>
-                        <a href="?filter=upcoming" class="<?php echo $filter == 'upcoming' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'; ?> whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
+                    <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                        <button onclick="showTab('upcoming')" id="upcoming-tab" class="border-dark-orchid text-dark-orchid whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
                             Upcoming
-                            <span class="ml-2 bg-blue-100 text-blue-900 py-0.5 px-2.5 rounded-full text-xs"><?php echo $counts['upcoming']; ?></span>
-                        </a>
-                        <a href="?filter=requested" class="<?php echo $filter == 'requested' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'; ?> whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
-                            Pending Approval
-                            <span class="ml-2 bg-yellow-100 text-yellow-900 py-0.5 px-2.5 rounded-full text-xs"><?php echo $counts['requested']; ?></span>
-                        </a>
-                        <a href="?filter=past" class="<?php echo $filter == 'past' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'; ?> whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
-                            Past
-                            <span class="ml-2 bg-green-100 text-green-900 py-0.5 px-2.5 rounded-full text-xs"><?php echo $counts['past']; ?></span>
-                        </a>
-                        <a href="?filter=canceled" class="<?php echo $filter == 'canceled' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'; ?> whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
+                        </button>
+                        <button onclick="showTab('completed')" id="completed-tab" class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
+                            Completed
+                        </button>
+                        <button onclick="showTab('canceled')" id="canceled-tab" class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
                             Canceled
-                            <span class="ml-2 bg-red-100 text-red-900 py-0.5 px-2.5 rounded-full text-xs"><?php echo $counts['canceled']; ?></span>
-                        </a>
+                        </button>
                     </nav>
                 </div>
             </div>
 
-            <!-- Appointments List -->
-            <?php if (empty($appointments)): ?>
-            <div class="text-center py-12 bg-white rounded-lg shadow-orchid-custom">
-                <i class="fa-solid fa-calendar-xmark fa-4x text-gray-400 mb-4"></i>
-                <h3 class="text-lg font-semibold text-gray-600 mb-2">No appointments found</h3>
-                <p class="text-gray-500">
-                    <?php 
-                    switch ($filter) {
-                        case 'upcoming': echo "You don't have any upcoming appointments."; break;
-                        case 'past': echo "You don't have any past appointments."; break;
-                        case 'canceled': echo "You don't have any canceled appointments."; break;
-                        default: echo "You haven't scheduled any appointments yet.";
-                    }
-                    ?>
-                </p>
-            </div>
-            <?php else: ?>
-            <div class="space-y-4">
-                <?php foreach ($appointments as $appointment): ?>
-                <div class="appointment-card bg-white p-6 rounded-lg shadow-orchid-custom">
-                    <div class="flex items-start justify-between">
-                        <div class="flex-1">
-                            <div class="flex items-center space-x-3 mb-2">
-                                <div class="flex items-center space-x-2">
-                                    <?php if ($appointment['providerRole'] == 'Doctor'): ?>
-                                        <i class="fa-solid fa-user-doctor text-blue-600"></i>
-                                        <span class="text-sm text-blue-600 font-medium">Doctor</span>
-                                    <?php elseif ($appointment['providerRole'] == 'Nutritionist'): ?>
-                                        <i class="fa-solid fa-utensils text-green-600"></i>
-                                        <span class="text-sm text-green-600 font-medium">Nutritionist</span>
-                                    <?php else: ?>
-                                        <i class="fa-solid fa-user-nurse text-purple-600"></i>
-                                        <span class="text-sm text-purple-600 font-medium">Healthcare Provider</span>
+            <!-- Appointments Grid -->
+            <div id="appointments-container">
+                <?php if (empty($appointments)): ?>
+                    <div class="text-center py-12">
+                        <i class="fa-solid fa-calendar-xmark fa-4x text-gray-400 mb-4"></i>
+                        <h3 class="text-xl font-semibold text-gray-600 mb-2">No Appointments Found</h3>
+                        <p class="text-gray-500 mb-6">You haven't booked any appointments yet.</p>
+                        <a href="doctorBooking.php" class="bg-dark-orchid text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors">
+                            <i class="fa-solid fa-plus mr-2"></i>
+                            Book Your First Appointment
+                        </a>
+                    </div>
+                <?php else: ?>
+                    <div class="grid gap-6" id="appointments-grid">
+                        <?php foreach ($appointments as $appointment): 
+                            $statusClass = '';
+                            $statusIcon = '';
+                            switch($appointment['status']) {
+                                case 'Scheduled':
+                                    $statusClass = 'bg-blue-100 text-blue-800';
+                                    $statusIcon = 'fa-clock';
+                                    break;
+                                case 'Completed':
+                                    $statusClass = 'bg-green-100 text-green-800';
+                                    $statusIcon = 'fa-check-circle';
+                                    break;
+                                case 'Canceled':
+                                    $statusClass = 'bg-red-100 text-red-800';
+                                    $statusIcon = 'fa-times-circle';
+                                    break;
+                                case 'Denied':
+                                    $statusClass = 'bg-gray-100 text-gray-800';
+                                    $statusIcon = 'fa-ban';
+                                    break;
+                                default:
+                                    $statusClass = 'bg-gray-100 text-gray-800';
+                                    $statusIcon = 'fa-question-circle';
+                            }
+                            
+                            $appointmentDateTime = new DateTime($appointment['appointmentDate']);
+                            $isUpcoming = $appointmentDateTime > new DateTime() && $appointment['status'] === 'Scheduled';
+                            $isPast = $appointmentDateTime <= new DateTime();
+                        ?>
+                            <div class="appointment-card bg-white rounded-lg shadow-orchid-custom p-6 appointment-item" data-status="<?php echo strtolower($appointment['status']); ?>">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div class="flex-1">
+                                        <div class="flex items-center mb-2">
+                                            <h3 class="text-xl font-semibold text-slate-800 mr-3">
+                                                <?php echo htmlspecialchars($appointment['providerName']); ?>
+                                            </h3>
+                                            <span class="<?php echo $statusClass; ?> px-3 py-1 rounded-full text-xs font-medium">
+                                                <i class="fa-solid <?php echo $statusIcon; ?> mr-1"></i>
+                                                <?php echo ucfirst($appointment['status']); ?>
+                                            </span>
+                                        </div>
+                                        <div class="flex items-center text-gray-600 mb-2">
+                                            <i class="fa-solid fa-user-md mr-2"></i>
+                                            <span class="capitalize"><?php echo strtolower($appointment['providerRole']); ?></span>
+                                            <?php if ($appointment['specialty']): ?>
+                                                <span class="mx-2">•</span>
+                                                <span><?php echo htmlspecialchars($appointment['specialty']); ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div class="flex items-center text-gray-600 mb-2">
+                                            <i class="fa-solid fa-calendar mr-2"></i>
+                                            <span><?php echo $appointmentDateTime->format('l, F j, Y'); ?></span>
+                                            <span class="mx-2">•</span>
+                                            <i class="fa-solid fa-clock mr-1"></i>
+                                            <span><?php echo $appointmentDateTime->format('g:i A'); ?></span>
+                                        </div>
+                                        <?php if ($appointment['consultationFees']): ?>
+                                            <div class="flex items-center text-gray-600">
+                                                <i class="fa-solid fa-money-bill mr-2"></i>
+                                                <span>৳<?php echo number_format($appointment['consultationFees'], 0); ?></span>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+
+                                <?php if ($appointment['notes']): ?>
+                                    <div class="bg-gray-50 p-4 rounded-lg mb-4">
+                                        <h4 class="font-medium text-gray-700 mb-2">Notes:</h4>
+                                        <p class="text-gray-600 text-sm"><?php echo htmlspecialchars($appointment['notes']); ?></p>
+                                    </div>
+                                <?php endif; ?>
+
+                                <div class="flex justify-between items-center pt-4 border-t border-gray-200">
+                                    <div class="flex space-x-3">
+                                        <?php if ($appointment['consultation_link'] && $appointment['status'] === 'Scheduled'): ?>
+                                            <a href="<?php echo htmlspecialchars($appointment['consultation_link']); ?>" 
+                                               target="_blank"
+                                               class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-700 transition-colors">
+                                                <i class="fa-solid fa-video mr-2"></i>
+                                                Join Meeting
+                                            </a>
+                                        <?php endif; ?>
+                                        
+                                        <?php if ($appointment['status'] === 'Completed'): ?>
+                                            <button onclick="openPrescriptionModalByAppointmentId(<?php echo $appointment['appointmentID']; ?>)" 
+                                               class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition-colors">
+                                                <i class="fa-solid fa-prescription mr-2"></i>
+                                                View Prescription
+                                            </button>
+                                        <?php endif; ?>
+                                    </div>
+                                    
+                                    <?php if ($appointment['status'] === 'Scheduled' && !$isPast): ?>
+                                        <form method="POST" class="inline" onsubmit="return confirm('Are you sure you want to cancel this appointment?');">
+                                            <input type="hidden" name="action" value="cancel">
+                                            <input type="hidden" name="appointmentID" value="<?php echo $appointment['appointmentID']; ?>">
+                                            <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-700 transition-colors">
+                                                <i class="fa-solid fa-times mr-2"></i>
+                                                Cancel
+                                            </button>
+                                        </form>
                                     <?php endif; ?>
                                 </div>
-                                <?php echo getStatusBadge($appointment['status']); ?>
                             </div>
-                            
-                            <h3 class="text-lg font-semibold text-slate-800 mb-1">
-                                <?php echo htmlspecialchars($appointment['providerName'] ?? 'Provider Not Assigned'); ?>
-                            </h3>
-                            
-                            <div class="flex items-center space-x-4 text-gray-600 mb-3">
-                                <div class="flex items-center space-x-1">
-                                    <i class="fa-solid fa-calendar-days text-sm"></i>
-                                    <span class="text-sm"><?php echo formatAppointmentDate($appointment['appointmentDate']); ?></span>
-                                </div>
-                                <div class="flex items-center space-x-1">
-                                    <i class="fa-solid fa-hashtag text-sm"></i>
-                                    <span class="text-sm">ID: <?php echo $appointment['appointmentID']; ?></span>
-                                </div>
-                            </div>
-
-                            <?php if (!empty($appointment['notes'])): ?>
-                            <div class="bg-gray-50 p-3 rounded-lg">
-                                <p class="text-sm text-gray-700">
-                                    <i class="fa-solid fa-sticky-note mr-1"></i>
-                                    <strong>Notes:</strong> <?php echo htmlspecialchars($appointment['notes']); ?>
-                                </p>
-                            </div>
-                            <?php endif; ?>
-                        </div>
-
-                        <div class="flex flex-col space-y-2 ml-4">
-                            <?php if (!empty($appointment['consultation_link']) && $appointment['status'] != 'Canceled'): ?>
-                            <a href="<?php echo htmlspecialchars($appointment['consultation_link']); ?>" 
-                               target="_blank"
-                               class="px-4 py-2 bg-dark-orchid text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition text-center">
-                                <i class="fa-solid fa-video mr-1"></i>Join Consultation
-                            </a>
-                            <?php endif; ?>
-                            
-                            <?php if (strtotime($appointment['appointmentDate']) > time() && $appointment['status'] != 'Canceled'): ?>
-                            <form method="POST" class="cancel-form" onsubmit="return confirmCancel('<?php echo $appointment['appointmentID']; ?>', '<?php echo htmlspecialchars($appointment['providerName'], ENT_QUOTES); ?>', '<?php echo formatAppointmentDate($appointment['appointmentDate']); ?>');">
-                                <input type="hidden" name="action" value="cancel">
-                                <input type="hidden" name="appointmentID" value="<?php echo $appointment['appointmentID']; ?>">
-                                <button type="submit" class="cancel-btn px-4 py-2 border border-red-300 text-red-700 rounded-lg text-sm font-medium hover:bg-red-50 transition">
-                                    <i class="fa-solid fa-calendar-xmark mr-1"></i>Cancel
-                                </button>
-                            </form>
-                            <?php endif; ?>
-                        </div>
+                        <?php endforeach; ?>
                     </div>
-                </div>
-                <?php endforeach; ?>
+                <?php endif; ?>
             </div>
-            <?php endif; ?>
         </main>
     </div>
 
-    <!-- Request Appointment Modal -->
-    <div id="requestModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
-        <div class="flex items-center justify-center min-h-screen p-4">
-            <div class="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                <div class="p-6">
-                    <!-- Modal Header -->
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-2xl font-bold text-slate-800">Request New Appointment</h2>
-                        <button onclick="closeRequestModal()" class="text-gray-400 hover:text-gray-600">
-                            <i class="fa-solid fa-times fa-xl"></i>
+    <script>
+        function showTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('[id$="-tab"]').forEach(tab => {
+                tab.classList.remove('border-dark-orchid', 'text-dark-orchid');
+                tab.classList.add('border-transparent', 'text-gray-500');
+            });
+            
+            document.getElementById(tabName + '-tab').classList.remove('border-transparent', 'text-gray-500');
+            document.getElementById(tabName + '-tab').classList.add('border-dark-orchid', 'text-dark-orchid');
+            
+            // Filter appointments
+            const appointments = document.querySelectorAll('.appointment-item');
+            appointments.forEach(appointment => {
+                const status = appointment.getAttribute('data-status');
+                
+                if (tabName === 'upcoming' && (status === 'scheduled')) {
+                    appointment.style.display = 'block';
+                } else if (tabName === 'completed' && status === 'completed') {
+                    appointment.style.display = 'block';
+                } else if (tabName === 'canceled' && (status === 'canceled' || status === 'denied')) {
+                    appointment.style.display = 'block';
+                } else {
+                    appointment.style.display = 'none';
+                }
+            });
+            
+            // Check if any appointments are visible
+            const visibleAppointments = Array.from(appointments).filter(app => app.style.display !== 'none');
+            const container = document.getElementById('appointments-container');
+            
+            if (visibleAppointments.length === 0) {
+                let message = '';
+                switch(tabName) {
+                    case 'upcoming':
+                        message = 'No upcoming appointments';
+                        break;
+                    case 'completed':
+                        message = 'No completed appointments';
+                        break;
+                    case 'canceled':
+                        message = 'No canceled appointments';
+                        break;
+                }
+                
+                if (!document.querySelector('.no-appointments-message')) {
+                    const noAppointmentsDiv = document.createElement('div');
+                    noAppointmentsDiv.className = 'no-appointments-message text-center py-12';
+                    noAppointmentsDiv.innerHTML = `
+                        <i class="fa-solid fa-calendar-xmark fa-4x text-gray-400 mb-4"></i>
+                        <h3 class="text-xl font-semibold text-gray-600 mb-2">${message}</h3>
+                    `;
+                    container.appendChild(noAppointmentsDiv);
+                }
+            } else {
+                const noAppointmentsMessage = document.querySelector('.no-appointments-message');
+                if (noAppointmentsMessage) {
+                    noAppointmentsMessage.remove();
+                }
+            }
+        }
+        
+        // Initialize with upcoming appointments
+        document.addEventListener('DOMContentLoaded', function() {
+            showTab('upcoming');
+        });
+    </script>
+
+    <!-- Prescription Modal -->
+    <div id="prescriptionModal" class="fixed inset-0 modal-overlay hidden items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full m-4 max-h-screen overflow-y-auto prescription-modal border-2 border-gray-200">
+            <!-- Modal Header -->
+            <div class="bg-gray-100 border-b-2 border-gray-300 p-4 no-print">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-xl font-bold text-gray-800" style="font-family: 'Times New Roman', serif;">
+                        <i class="fa-solid fa-prescription mr-2"></i>
+                        Medical Prescription
+                    </h3>
+                    <div class="flex items-center space-x-3">
+                        <button onclick="downloadModalPDF()" class="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg transition-colors text-sm">
+                            <i class="fa-solid fa-file-pdf mr-2"></i>
+                            Print as PDF
+                        </button>
+                        <button onclick="printPrescription()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors text-sm">
+                            <i class="fa-solid fa-print mr-2"></i>
+                            Print
+                        </button>
+                        <button onclick="closePrescriptionModal()" class="text-gray-600 hover:text-gray-800 p-2">
+                            <i class="fa-solid fa-times fa-lg"></i>
                         </button>
                     </div>
-
-                    <!-- Request Form -->
-                    <form method="POST" id="requestForm" class="space-y-6">
-                        <input type="hidden" name="action" value="request_appointment">
-                        <input type="hidden" name="providerID" id="selectedProviderID">
-
-                        <!-- Step 1: Choose Provider -->
-                        <div>
-                            <h3 class="text-lg font-semibold text-slate-800 mb-4">
-                                <span class="bg-dark-orchid text-white rounded-full w-6 h-6 inline-flex items-center justify-center text-sm mr-2">1</span>
-                                Choose Healthcare Provider
-                            </h3>
-                            
-                            <div class="grid grid-cols-1 gap-3 max-h-60 overflow-y-auto">
-                                <?php foreach ($providers as $provider): ?>
-                                <div class="provider-card border-2 border-gray-200 rounded-lg p-3 cursor-pointer hover:bg-gray-50" 
-                                     onclick="selectProvider(<?php echo $provider['userID']; ?>, '<?php echo htmlspecialchars($provider['Name']); ?>')">
-                                    <div class="flex items-center space-x-3">
-                                        <div class="flex-shrink-0">
-                                            <?php if ($provider['role'] == 'Doctor'): ?>
-                                                <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                                                    <i class="fa-solid fa-user-doctor text-blue-600"></i>
-                                                </div>
-                                            <?php else: ?>
-                                                <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                                                    <i class="fa-solid fa-utensils text-green-600"></i>
-                                                </div>
-                                            <?php endif; ?>
-                                        </div>
-                                        <div class="flex-1">
-                                            <h4 class="font-semibold text-slate-800"><?php echo htmlspecialchars($provider['Name']); ?></h4>
-                                            <p class="text-sm text-gray-600"><?php echo htmlspecialchars($provider['specialty']); ?></p>
-                                            <p class="text-sm text-gray-600">Fee: ৳<?php echo number_format($provider['consultationFees'], 0); ?></p>
-                                        </div>
-                                        <span class="text-xs px-2 py-1 rounded-full 
-                                            <?php echo $provider['role'] == 'Doctor' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'; ?>">
-                                            <?php echo $provider['role']; ?>
-                                        </span>
-                                    </div>
-                                </div>
-                                <?php endforeach; ?>
-                            </div>
-                        </div>
-
-                        <!-- Step 2: Choose Date & Time -->
-                        <div>
-                            <h3 class="text-lg font-semibold text-slate-800 mb-4">
-                                <span class="bg-dark-orchid text-white rounded-full w-6 h-6 inline-flex items-center justify-center text-sm mr-2">2</span>
-                                Select Date & Time
-                            </h3>
-                            
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Date</label>
-                                    <input type="date" name="appointmentDate" 
-                                           min="<?php echo date('Y-m-d', strtotime('+1 day')); ?>"
-                                           max="<?php echo date('Y-m-d', strtotime('+30 days')); ?>"
-                                           class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" 
-                                           required>
-                                </div>
-                                
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Time</label>
-                                    <select name="appointmentTime" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" required>
-                                        <option value="">Select time</option>
-                                        <?php foreach ($timeSlots as $slot): ?>
-                                        <option value="<?php echo $slot; ?>">
-                                            <?php echo date('g:i A', strtotime($slot)); ?>
-                                        </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Step 3: Notes -->
-                        <div>
-                            <h3 class="text-lg font-semibold text-slate-800 mb-4">
-                                <span class="bg-dark-orchid text-white rounded-full w-6 h-6 inline-flex items-center justify-center text-sm mr-2">3</span>
-                                Additional Notes (Optional)
-                            </h3>
-                            
-                            <textarea name="notes" rows="3" 
-                                      class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                                      placeholder="Describe your health concerns or specific requirements..."></textarea>
-                        </div>
-
-                        <!-- Modal Footer -->
-                        <div class="flex justify-end space-x-3 pt-4 border-t">
-                            <button type="button" onclick="closeRequestModal()" 
-                                    class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
-                                Cancel
-                            </button>
-                            <button type="submit" id="submitRequestBtn" 
-                                    class="bg-dark-orchid text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition disabled:opacity-50"
-                                    disabled>
-                                <i class="fa-solid fa-paper-plane mr-2"></i>Submit Request
-                            </button>
-                        </div>
-                    </form>
                 </div>
+            </div>
+
+            <!-- Prescription Content -->
+            <div id="prescriptionContent" class="prescription-content p-8 bg-white">
+                <!-- This will be populated by JavaScript -->
             </div>
         </div>
     </div>
 
     <script>
-        let selectedProvider = null;
+        let currentPrescription = null;
+        // Load prescriptions into a JS array for safe client-side actions
+        const PRESCRIPTIONS = <?php echo json_encode($prescriptions, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 
-        function openRequestModal() {
-            document.getElementById('requestModal').classList.remove('hidden');
+        function openPrescriptionModal(prescription) {
+            currentPrescription = prescription;
+            const modal = document.getElementById('prescriptionModal');
+            const content = document.getElementById('prescriptionContent');
+            
+            // Generate prescription content
+            content.innerHTML = generatePrescriptionHTML(prescription);
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
             document.body.style.overflow = 'hidden';
         }
 
-        function closeRequestModal() {
-            document.getElementById('requestModal').classList.add('hidden');
+        function closePrescriptionModal() {
+            const modal = document.getElementById('prescriptionModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
             document.body.style.overflow = 'auto';
-            // Reset form
-            document.getElementById('requestForm').reset();
-            document.querySelectorAll('.provider-card').forEach(card => {
-                card.classList.remove('selected');
-                card.style.borderColor = '';
-                card.style.backgroundColor = '';
+            currentPrescription = null;
+        }
+
+        function generatePrescriptionHTML(prescription) {
+            const currentDate = new Date().toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
             });
-            selectedProvider = null;
-            checkFormValidity();
+
+            return `
+            <div style="font-family: Arial, Helvetica, sans-serif; color: #111;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #e5e7eb;padding-bottom:12px;margin-bottom:12px;">
+                    <div style="display:flex;align-items:center;">
+                        <img src="/uploads/logo.png" alt="Clinic Logo" onerror="this.style.display='none'" style="width:56px;height:56px;object-fit:contain;margin-right:12px;">
+                        <div>
+                            <div style="font-family: Georgia, serif; font-size:22px; font-weight:700; color:#111; margin-bottom:2px;">Dr. ${prescription.doctorName}</div>
+                            <div style="font-family: Georgia, serif; font-size:14px; color:#374151;">${prescription.specialty}</div>
+                            <div style="font-family: Georgia, serif; font-size:13px; color:#374151;">${prescription.hospital}</div>
+                            ${prescription.licNo ? `<div style="font-family: Georgia, serif; font-size:12px; color:#374151;">Reg. No: ${prescription.licNo}</div>` : ''}
+                        </div>
+                    </div>
+                    <div style="text-align:right; min-width:140px;">
+                        <div style="font-size:13px; color:#374151;">Date: ${new Date(prescription.date).toLocaleDateString()}</div>
+                        <div style="font-size:13px; color:#374151;">Prescription No: <strong>${String(prescription.prescriptionID).padStart(6, '0')}</strong></div>
+                    </div>
+                </div>
+
+                <div style="font-size:12px; color:#6b7280; margin-bottom:8px;">CarePlus Healthcare Center, 123 Medical District, Dhaka - 1205 | +880-1234-567890</div>
+
+                <div style="margin-bottom:8px;">
+                    <strong>Patient:</strong> ${prescription.patientName} &nbsp;&nbsp; <strong>Patient ID:</strong> ${prescription.patientUserID}
+                </div>
+
+                <div style="display:flex;align-items:flex-start;margin-top:12px;">
+                    <div style="font-size:40px;font-family: Georgia, serif; line-height:1; margin-right:12px;">℞</div>
+                    <div style="flex:1;">
+                        <div style="font-size:16px; color:#111; line-height:1.5; min-height:100px;">
+                            ${prescription.medicineInfo
+                                .split(/,\s*/)
+                                .map(med => `<div style='margin-bottom:6px;'>${med.trim()}</div>`)
+                                .join('')}
+                        </div>
+                    </div>
+                </div>
+
+                ${prescription.instructions ? `
+                <div style="margin-top:12px;">
+                    <strong>Instructions:</strong>
+                    <div style="white-space:pre-line;margin-top:6px;">${prescription.instructions}</div>
+                </div>
+                ` : ''}
+
+                <div style="margin-top:40px;text-align:right;">
+                    <div style="border-top:1px solid #e5e7eb;padding-top:6px;display:inline-block;min-width:200px;">
+                        <div style="font-style:italic;color:#6b7280;">Signature</div>
+                        <div style="font-family: Georgia, serif; font-weight:700;">Dr. ${prescription.doctorName}</div>
+                    </div>
+                </div>
+
+                <div style="margin-top:16px;border-top:1px solid #eee;padding-top:8px;font-size:11px;color:#6b7280;text-align:center;">
+                    This is a computer generated prescription. Valid for 30 days from date of issue.<br>
+                    Generated on: ${currentDate}
+                </div>
+            </div>
+            `;
         }
 
-        function selectProvider(providerID, providerName) {
-            // Remove previous selection
-            document.querySelectorAll('.provider-card').forEach(card => {
-                card.classList.remove('selected');
-                card.style.borderColor = '';
-                card.style.backgroundColor = '';
-            });
-            
-            // Add selection to clicked card
-            event.currentTarget.classList.add('selected');
-            event.currentTarget.style.borderColor = '#9932CC';
-            event.currentTarget.style.backgroundColor = '#f3e8ff';
-            
-            // Update hidden input
-            document.getElementById('selectedProviderID').value = providerID;
-            selectedProvider = {id: providerID, name: providerName};
-            
-            checkFormValidity();
+        function printPrescription() {
+            window.print();
         }
 
-        function checkFormValidity() {
-            const providerSelected = selectedProvider !== null;
-            const dateSelected = document.querySelector('input[name="appointmentDate"]').value !== '';
-            const timeSelected = document.querySelector('select[name="appointmentTime"]').value !== '';
-            
-            const submitBtn = document.getElementById('submitRequestBtn');
-            submitBtn.disabled = !(providerSelected && dateSelected && timeSelected);
+        // Open a new window with printable prescription HTML and trigger print (reliable fallback)
+        function openPrintWindowForPrescription(prescription) {
+            try {
+                const printWindow = window.open('', '_blank', 'width=900,height=1100');
+                if (!printWindow) { alert('Unable to open print window. Please allow popups for this site.'); return; }
+                const html = `
+                    <html>
+                    <head>
+                        <title>Prescription - ${prescription.patientName}</title>
+                        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+                        <style>
+                            body { font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #111; }
+                            @media print { @page { margin: 20mm; } }
+                        </style>
+                    </head>
+                    <body>
+                        ${generatePrescriptionHTML(prescription)}
+                        <script>
+                            setTimeout(() => { window.print(); }, 400);
+                            window.onafterprint = function() { window.close(); };
+                        <\/script>
+                    </body>
+                    </html>
+                `;
+                printWindow.document.open();
+                printWindow.document.write(html);
+                printWindow.document.close();
+            } catch (err) {
+                console.error('print window error', err);
+                // fallback: open modal then let user use Print as PDF
+                currentPrescription = prescription;
+                openPrescriptionModal(prescription);
+                alert('Unable to open print window automatically. The prescription has been opened in a modal. Use the Print as PDF button there.');
+            }
         }
 
-        // Add event listeners to form inputs
-        document.querySelector('input[name="appointmentDate"]').addEventListener('change', checkFormValidity);
-        document.querySelector('select[name="appointmentTime"]').addEventListener('change', checkFormValidity);
+        function downloadModalPDF() {
+            if (!currentPrescription) return;
+            openPrintWindowForPrescription(currentPrescription);
+        }
 
+        function openPrescriptionModalByAppointmentId(appointmentID) {
+            const pres = PRESCRIPTIONS.find(p => Number(p.appointmentID) === Number(appointmentID));
+            if (!pres) {
+                alert('Prescription not found for this appointment.');
+                return;
+            }
+            openPrescriptionModal(pres);
+        }
+    </script>
+
+    <script>
         // Close modal when clicking outside
-        document.getElementById('requestModal').addEventListener('click', function(e) {
+        document.getElementById('prescriptionModal').addEventListener('click', function(e) {
             if (e.target === this) {
-                closeRequestModal();
+                closePrescriptionModal();
             }
         });
-
-        // Auto-hide success/error messages after 5 seconds
-        document.addEventListener('DOMContentLoaded', function() {
-            const alerts = document.querySelectorAll('.alert-auto-hide');
-            alerts.forEach(function(alert) {
-                setTimeout(function() {
-                    alert.style.transition = 'opacity 0.5s';
-                    alert.style.opacity = '0';
-                    setTimeout(function() {
-                        alert.remove();
-                    }, 500);
-                }, 5000);
-            });
-        });
-
-        function confirmCancel(appointmentId, providerName, dateTime) {
-            const confirmMsg = `Are you sure you want to cancel your appointment with ${providerName} on ${dateTime}?\n\nThis action cannot be undone.`;
-            return confirm(confirmMsg);
-        }
     </script>
 </body>
 </html>
