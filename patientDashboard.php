@@ -50,6 +50,7 @@ $conn->close();
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -58,31 +59,49 @@ $conn->close();
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <style>
-        body { font-family: 'Inter', sans-serif; }
-        .bg-dark-orchid { background-color: #9932CC; }
-        .text-dark-orchid { color: #9932CC; }
-        .shadow-orchid-custom { box-shadow: 0 4px 6px -1px rgba(153, 50, 204, 0.1), 0 2px 4px -2px rgba(153, 50, 204, 0.1); }
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .bg-dark-orchid {
+            background-color: #9932CC;
+        }
+
+        .text-dark-orchid {
+            color: #9932CC;
+        }
+
+        .shadow-orchid-custom {
+            box-shadow: 0 4px 6px -1px rgba(153, 50, 204, 0.1), 0 2px 4px -2px rgba(153, 50, 204, 0.1);
+        }
+
         .feature-card {
             transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
         }
+
         .feature-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 10px 15px -3px rgba(153, 50, 204, 0.15), 0 4px 6px -2px rgba(153, 50, 204, 0.1);
         }
+
         .stat-card {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
+
         .stat-card-alt {
             background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
         }
+
         .stat-card-alt2 {
             background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
         }
+
         .stat-card-alt3 {
             background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
         }
     </style>
 </head>
+
 <body class="bg-purple-50">
     <div class="flex min-h-screen">
         <!-- Sidebar -->
@@ -107,6 +126,11 @@ $conn->close();
                     <i class="fa-solid fa-hands-holding-child w-5"></i>
                     <span>Caregiver Bookings</span>
                 </a>
+                <a href="upload_medical_history.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
+                    <i class="fa-solid fa-file-lines w-5"></i>
+                    <span>Upload medical Record</span>
+                </a>
+
                 <a href="patientMedicalHistory.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
                     <i class="fa-solid fa-file-medical w-5"></i>
                     <span>Medical History</span>
@@ -187,6 +211,7 @@ $conn->close();
                         <h3 class="text-lg font-semibold text-slate-800">Caregiver Bookings</h3>
                         <p class="text-gray-600 text-sm mt-2">Manage your caregiver services</p>
                     </a>
+
                     <a href="patientMedicalHistory.php" class="feature-card bg-white p-6 rounded-lg shadow-orchid-custom text-center hover:shadow-lg">
                         <i class="fa-solid fa-file-medical fa-2x text-dark-orchid mb-4"></i>
                         <h3 class="text-lg font-semibold text-slate-800">Medical History</h3>
@@ -201,51 +226,60 @@ $conn->close();
                 <div class="bg-white p-6 rounded-lg shadow-orchid-custom">
                     <h3 class="text-xl font-bold text-slate-800 mb-4">Health Overview</h3>
                     <?php if ($patientInfo): ?>
-                    <div class="space-y-4">
-                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                            <span class="font-medium text-gray-700">Age</span>
-                            <span class="text-slate-800"><?php echo $patientInfo['age'] ?? 'Not set'; ?> years</span>
-                        </div>
-                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                            <span class="font-medium text-gray-700">Height</span>
-                            <span class="text-slate-800"><?php echo $patientInfo['height'] ?? 'Not set'; ?> cm</span>
-                        </div>
-                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                            <span class="font-medium text-gray-700">Weight</span>
-                            <span class="text-slate-800"><?php echo $patientInfo['weight'] ?? 'Not set'; ?> kg</span>
-                        </div>
-                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                            <span class="font-medium text-gray-700">Gender</span>
-                            <span class="text-slate-800"><?php echo $patientInfo['gender'] ?? 'Not set'; ?></span>
-                        </div>
-                        <?php if ($patientInfo['height'] && $patientInfo['weight']): ?>
-                        <?php 
-                        $heightInMeters = $patientInfo['height'] / 100;
-                        $bmi = round($patientInfo['weight'] / ($heightInMeters * $heightInMeters), 1);
-                        $bmiCategory = '';
-                        $bmiColor = '';
-                        if ($bmi < 18.5) { $bmiCategory = 'Underweight'; $bmiColor = 'text-blue-600'; }
-                        elseif ($bmi < 25) { $bmiCategory = 'Normal'; $bmiColor = 'text-green-600'; }
-                        elseif ($bmi < 30) { $bmiCategory = 'Overweight'; $bmiColor = 'text-yellow-600'; }
-                        else { $bmiCategory = 'Obese'; $bmiColor = 'text-red-600'; }
-                        ?>
-                        <div class="flex justify-between items-center p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
-                            <span class="font-medium text-gray-700">BMI</span>
-                            <div class="text-right">
-                                <span class="text-slate-800 font-bold"><?php echo $bmi; ?></span>
-                                <span class="block text-sm <?php echo $bmiColor; ?>"><?php echo $bmiCategory; ?></span>
+                        <div class="space-y-4">
+                            <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                                <span class="font-medium text-gray-700">Age</span>
+                                <span class="text-slate-800"><?php echo $patientInfo['age'] ?? 'Not set'; ?> years</span>
                             </div>
+                            <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                                <span class="font-medium text-gray-700">Height</span>
+                                <span class="text-slate-800"><?php echo $patientInfo['height'] ?? 'Not set'; ?> cm</span>
+                            </div>
+                            <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                                <span class="font-medium text-gray-700">Weight</span>
+                                <span class="text-slate-800"><?php echo $patientInfo['weight'] ?? 'Not set'; ?> kg</span>
+                            </div>
+                            <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                                <span class="font-medium text-gray-700">Gender</span>
+                                <span class="text-slate-800"><?php echo $patientInfo['gender'] ?? 'Not set'; ?></span>
+                            </div>
+                            <?php if ($patientInfo['height'] && $patientInfo['weight']): ?>
+                                <?php
+                                $heightInMeters = $patientInfo['height'] / 100;
+                                $bmi = round($patientInfo['weight'] / ($heightInMeters * $heightInMeters), 1);
+                                $bmiCategory = '';
+                                $bmiColor = '';
+                                if ($bmi < 18.5) {
+                                    $bmiCategory = 'Underweight';
+                                    $bmiColor = 'text-blue-600';
+                                } elseif ($bmi < 25) {
+                                    $bmiCategory = 'Normal';
+                                    $bmiColor = 'text-green-600';
+                                } elseif ($bmi < 30) {
+                                    $bmiCategory = 'Overweight';
+                                    $bmiColor = 'text-yellow-600';
+                                } else {
+                                    $bmiCategory = 'Obese';
+                                    $bmiColor = 'text-red-600';
+                                }
+                                ?>
+                                <div class="flex justify-between items-center p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
+                                    <span class="font-medium text-gray-700">BMI</span>
+                                    <div class="text-right">
+                                        <span class="text-slate-800 font-bold"><?php echo $bmi; ?></span>
+                                        <span class="block text-sm <?php echo $bmiColor; ?>"><?php echo $bmiCategory; ?></span>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
                         </div>
-                        <?php endif; ?>
-                    </div>
                     <?php else: ?>
-                    <div class="text-center py-8">
-                        <i class="fa-solid fa-user-plus fa-3x text-gray-400 mb-4"></i>
-                        <p class="text-gray-600">Complete your profile to see health overview</p>
-                        <a href="#" class="mt-4 inline-block bg-dark-orchid text-white px-4 py-2 rounded-lg hover:bg-purple-700">
-                            Complete Profile
-                        </a>
-                    </div>
+                        <div class="text-center py-8">
+                            <i class="fa-solid fa-user-plus fa-3x text-gray-400 mb-4"></i>
+                            <p class="text-gray-600">Complete your profile to see health overview</p>
+                            <a href="#" class="mt-4 inline-block bg-dark-orchid text-white px-4 py-2 rounded-lg hover:bg-purple-700">
+                                Complete Profile
+                            </a>
+                        </div>
                     <?php endif; ?>
                 </div>
 
@@ -264,4 +298,5 @@ $conn->close();
         </main>
     </div>
 </body>
+
 </html>
