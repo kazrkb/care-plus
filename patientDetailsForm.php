@@ -73,7 +73,7 @@ $conn->close();
                 <div><label class="block text-sm font-medium text-gray-700">Height (cm)</label><input type="text" name="height" class="w-full mt-1 p-2 border rounded"></div>
                 <div><label class="block text-sm font-medium text-gray-700">Weight (kg)</label><input type="text" name="weight" class="w-full mt-1 p-2 border rounded"></div>
             </div>
-            <button type="submit" class="w-full mt-6 py-2 px-4 bg-indigo-600 text-white rounded-md font-semibold hover:bg-indigo-700 transition">
+            <button type="submit" class="w-full mt-6 py-2 px-4 bg-purple-600 text-white rounded-md font-semibold hover:bg-indigo-700 transition">
                 Complete Registration
             </button>
         </form>

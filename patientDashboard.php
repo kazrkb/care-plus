@@ -135,6 +135,10 @@ $conn->close();
                     <i class="fa-solid fa-file-medical w-5"></i>
                     <span>Medical History</span>
                 </a>
+
+                <a href="my_transactions.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
+                    <i class="fa-solid fa-money-bill-wave w-5"></i><span>Transactions</span>
+                </a>
                 <a href="logout.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg mt-8">
                     <i class="fa-solid fa-arrow-right-from-bracket w-5"></i>
                     <span>Logout</span>
