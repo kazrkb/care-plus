@@ -35,7 +35,22 @@ if (!isset($_SESSION['userID']) || $_SESSION['role'] !== 'CareGiver') {
     exit();
 }
 
-
+// === DATABASE CONNECTION ===
+try {
+    $conn = require_once 'config.php';
+    if (!$conn) {
+        throw new Exception("Failed to get database connection from config.php");
+    }
+} catch (Exception $e) {
+    die("
+    <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; border: 1px solid #e74c3c; border-radius: 5px; background-color: #fdf2f2;'>
+        <h2 style='color: #e74c3c;'>❌ Database Connection Error</h2>
+        <p><strong>Error:</strong> " . htmlspecialchars($e->getMessage()) . "</p>
+        <p><strong>Solution:</strong> Please check your XAMPP MySQL service and ensure the 'healthcare' database exists.</p>
+        <p><a href='http://localhost/phpmyadmin' target='_blank' style='color: #3498db;'>Open phpMyAdmin</a> to verify database setup.</p>
+    </div>
+    ");
+}
 
 // === SESSION DATA ===
 $caregiverID = $_SESSION['userID'];
