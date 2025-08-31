@@ -159,8 +159,12 @@ $conn->close();
             <header class="flex justify-between items-center mb-8">
                 <div>
                     <h1 class="text-3xl font-bold text-slate-800">My Schedule</h1>
-                    <p cs="text-gray-600 mt-1">Manage your available time slots for patient appointments.</p>
-                <"text-sm text-gray-500">Nutritionist</p>
+                    <p class="text-gray-600 mt-1">Manage your available time slots for patient appointments.</p>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="text-right">
+                        <p class="font-semibold text-slate-700"><?php echo htmlspecialchars($userName); ?></p>
+                        <p class="text-sm text-gray-500">Nutritionist</p>
                     </div>
                     <div class="w-12 h-12 rounded-full bg-dark-orchid text-white flex items-center justify-center font-bold text-lg"><?php echo htmlspecialchars($userAvatar); ?></div>
                 </div>
@@ -168,13 +172,16 @@ $conn->close();
             
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div class="lg:col-span-1 space-y-8">
-                    <div ($errorMsg): ?><div class="mb-4 p-3 bg-red-100 text-red-700 rounded-md"><?php echo $errorMsg; ?></div><?php endif; ?>
+                    <div class="bg-white p-6 rounded-xl shadow-lg h-fit">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4">Add New Availability</h2>
+                        <?php if ($successMsg): ?><div class="mb-4 p-3 bg-green-100 text-green-700 rounded-md"><?php echo $successMsg; ?></div><?php endif; ?>
+                        <?php if ($errorMsg): ?><div class="mb-4 p-3 bg-red-100 text-red-700 rounded-md"><?php echo $errorMsg; ?></div><?php endif; ?>
                         <form action="nutritionist_schedule.php" method="POST" class="space-y-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Date</label>
                                 <input type="date" name="availableDate" required class="w-full mt-1 p-2 border rounded-md" min="<?php echo date('Y-m-d'); ?>">
                             </div>
-                            <div class="g2 gap-4">
+                            <div class="grid grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Start Time</label>
                                     <input type="time" name="startTime" required class="w-full mt-1 p-2 border rounded-md">
