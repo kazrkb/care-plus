@@ -103,6 +103,10 @@ $conn->close();
                     <i class="fa-solid fa-calendar-days w-5"></i>
                     <span>My Appointments</span>
                 </a>
+                <a href="doctorBooking.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
+                    <i class="fa-solid fa-user-doctor w-5"></i>
+                    <span>Doctor Appointments</span>
+                </a>
                 <a href="caregiverBooking.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
                     <i class="fa-solid fa-hands-holding-child w-5"></i>
                     <span>Caregiver Bookings</span>
@@ -171,8 +175,8 @@ $conn->close();
             <!-- Quick Actions -->
             <div class="mb-8">
                 <h2 class="text-2xl font-bold text-slate-800 mb-6">Quick Actions</h2>
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <a href="bookAppointment.php" class="feature-card bg-white p-6 rounded-lg shadow-orchid-custom text-center hover:shadow-lg">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+                    <a href="doctorBooking.php" class="feature-card bg-white p-6 rounded-lg shadow-orchid-custom text-center hover:shadow-lg">
                         <i class="fa-solid fa-calendar-plus fa-2x text-dark-orchid mb-4"></i>
                         <h3 class="text-lg font-semibold text-slate-800">Book Appointment</h3>
                         <p class="text-gray-600 text-sm mt-2">Book new appointment with providers</p>
@@ -181,6 +185,11 @@ $conn->close();
                         <i class="fa-solid fa-calendar-days fa-2x text-dark-orchid mb-4"></i>
                         <h3 class="text-lg font-semibold text-slate-800">My Appointments</h3>
                         <p class="text-gray-600 text-sm mt-2">View and manage your appointments</p>
+                    </a>
+                    <a href="doctorBooking.php" class="feature-card bg-white p-6 rounded-lg shadow-orchid-custom text-center hover:shadow-lg">
+                        <i class="fa-solid fa-user-doctor fa-2x text-dark-orchid mb-4"></i>
+                        <h3 class="text-lg font-semibold text-slate-800">Doctor Appointments</h3>
+                        <p class="text-gray-600 text-sm mt-2">Book and manage doctor appointments</p>
                     </a>
                     <a href="caregiverBooking.php" class="feature-card bg-white p-6 rounded-lg shadow-orchid-custom text-center hover:shadow-lg">
                         <i class="fa-solid fa-hands-holding-child fa-2x text-dark-orchid mb-4"></i>

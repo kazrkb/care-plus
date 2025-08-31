@@ -190,6 +190,10 @@ function formatDateTime($datetime) {
                     <i class="fa-solid fa-calendar-days w-5"></i>
                     <span>My Appointments</span>
                 </a>
+                <a href="doctorBooking.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
+                    <i class="fa-solid fa-user-doctor w-5"></i>
+                    <span>Doctor Appointments</span>
+                </a>
                 <a href="caregiverBooking.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
                     <i class="fa-solid fa-hands-holding-child w-5"></i>
                     <span>Caregiver Bookings</span>

@@ -167,6 +167,10 @@ $conn->close();
                     <i class="fa-solid fa-calendar-days w-5"></i>
                     <span>My Appointments</span>
                 </a>
+                <a href="doctorBooking.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
+                    <i class="fa-solid fa-user-doctor w-5"></i>
+                    <span>Doctor Appointments</span>
+                </a>
                 <a href="caregiverBooking.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
                     <i class="fa-solid fa-hands-holding-child w-5"></i>
                     <span>Caregiver Bookings</span>
@@ -191,7 +195,7 @@ $conn->close();
                     <p class="text-gray-600 mt-1">Manage your appointments with doctors and nutritionists</p>
                 </div>
                 <div class="flex items-center space-x-4">
-                    <a href="bookAppointment.php" class="bg-dark-orchid text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors">
+                    <a href="doctorBooking.php" class="bg-dark-orchid text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors">
                         <i class="fa-solid fa-plus mr-2"></i>
                         Book New Appointment
                     </a>
@@ -252,7 +256,7 @@ $conn->close();
                         <i class="fa-solid fa-calendar-xmark fa-4x text-gray-400 mb-4"></i>
                         <h3 class="text-xl font-semibold text-gray-600 mb-2">No Appointments Found</h3>
                         <p class="text-gray-500 mb-6">You haven't booked any appointments yet.</p>
-                        <a href="bookAppointment.php" class="bg-dark-orchid text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors">
+                        <a href="doctorBooking.php" class="bg-dark-orchid text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors">
                             <i class="fa-solid fa-plus mr-2"></i>
                             Book Your First Appointment
                         </a>

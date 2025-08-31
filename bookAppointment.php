@@ -1,57 +1,8 @@
 <?php
-session_start();
-
-// Protect this page: allow only logged-in Patients
-if (!isset($_SESSION['userID']) || $_SESSION['role'] !== 'Patient') {
-    header("Location: login.php");
-    exit();
-}
-
-// Database Connection
-$conn = require_once 'config.php';
-
-$userName = $_SESSION['Name'];
-$userID = $_SESSION['userID'];
-$userAvatar = strtoupper(substr($userName, 0, 2));
-
-$success_message = '';
-$error_message = '';
-
-// Handle appointment booking
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'book') {
-    $scheduleID = $_POST['scheduleID'];
-    $providerID = $_POST['providerID'];
-    $appointmentDate = $_POST['appointmentDate'];
-    $notes = $_POST['notes'] ?? '';
-    
-    // Check if schedule is still available
-    $checkQuery = "SELECT status FROM schedule WHERE scheduleID = ? AND status = 'Available'";
-    $checkStmt = $conn->prepare($checkQuery);
-    $checkStmt->bind_param("i", $scheduleID);
-    $checkStmt->execute();
-    $checkResult = $checkStmt->get_result();
-    
-    if ($checkResult->num_rows > 0) {
-        // Create appointment
-        $appointmentQuery = "INSERT INTO appointment (patientID, providerID, appointmentDate, status, scheduleID, notes) VALUES (?, ?, ?, 'Scheduled', ?, ?)";
-        $appointmentStmt = $conn->prepare($appointmentQuery);
-        $appointmentStmt->bind_param("iisss", $userID, $providerID, $appointmentDate, $scheduleID, $notes);
-        
-        if ($appointmentStmt->execute()) {
-            // Update schedule status to booked
-            $updateScheduleQuery = "UPDATE schedule SET status = 'Booked' WHERE scheduleID = ?";
-            $updateScheduleStmt = $conn->prepare($updateScheduleQuery);
-            $updateScheduleStmt->bind_param("i", $scheduleID);
-            $updateScheduleStmt->execute();
-            
-            $success_message = "Appointment booked successfully!";
-        } else {
-            $error_message = "Failed to book appointment.";
-        }
-    } else {
-        $error_message = "This time slot is no longer available.";
-    }
-}
+// Redirect to the new doctor booking system
+header("Location: doctorBooking.php");
+exit();
+?>
 
 // Get filter parameters
 $provider_type = $_GET['provider_type'] ?? 'all';
