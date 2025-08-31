@@ -38,3 +38,40 @@ $progressData = [
     ['patientName'=>'Charlie','dataType'=>'temperature','value'=>36.6,'recordedDate'=>'2025-08-31 12:00'],
     ['patientName'=>'Charlie','dataType'=>'oxygen_level','value'=>98,'recordedDate'=>'2025-08-31 12:30'],
 ];
+$dates = array_unique(array_map(fn($r)=>date('Y-m-d', strtotime($r['recordedDate'])),$progressData));
+sort($dates);
+
+$lineDatasets = [];
+$dataTypes = array_unique(array_map(fn($r)=>$r['dataType'],$progressData));
+$colors = ['#6D28D9','#2563EB','#059669','#F59E0B','#EF4444','#0EA5E9','#22C55E','#A855F7'];
+foreach($dataTypes as $i=>$type){
+    $series = [];
+    foreach($dates as $d){
+        $vals = array_filter($progressData, fn($r)=>$r['dataType']==$type && date('Y-m-d', strtotime($r['recordedDate']))==$d);
+        $series[] = $vals ? array_sum(array_column($vals,'value'))/count($vals) : null;
+    }
+    $lineDatasets[] = [
+        'label'=>ucwords(str_replace('_',' ',$type)),
+        'data'=>$series,
+        'borderColor'=>$colors[$i%count($colors)],
+        'tension'=>0.3
+    ];
+}
+
+$conn->close();
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CareGiver Dashboard - CarePlus</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .bg-dark-orchid { background-color: #9932CC; }
+        .text-dark-orchid { color: #9932CC; }
+    </style>
+</head>
