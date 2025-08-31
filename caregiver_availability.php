@@ -116,10 +116,7 @@ $conn->close();
             <div class="p-6"><a href="#" class="text-2xl font-bold text-dark-orchid">CarePlus</a></div>
             <nav class="px-4">
                 <a href="careGiverDashboard.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-gray-100 rounded-lg"><i class="fa-solid fa-table-columns w-5"></i><span>Dashboard</span></a>
-                <a href="caregiverProfile.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-regular fa-user w-5"></i><span>My Profile</span></a>
-                <a href="caregiver_careplan.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-clipboard-list w-5"></i><span>Care Plans</span></a>
                 <a href="caregiver_availability.php" class="flex items-center space-x-3 px-4 py-3 bg-purple-50 text-dark-orchid rounded-lg"><i class="fa-solid fa-calendar-days w-5"></i><span>Manage Availability</span></a>
-                <a href="my_bookings.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-calendar-check w-5"></i><span>My Bookings</span></a>
                 <a href="logout.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-gray-100 rounded-lg mt-8"><i class="fa-solid fa-arrow-right-from-bracket w-5"></i><span>Logout</span></a>
             </nav>
         </aside>

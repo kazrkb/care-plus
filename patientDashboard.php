@@ -85,9 +85,10 @@ $conn->close();
 </head>
 <body class="bg-purple-50">
     <div class="flex min-h-screen">
+        <!-- Sidebar -->
         <aside class="w-64 bg-white border-r">
             <div class="p-6">
-                <a href="#" class="text-2xl font-bold text-dark-orchid">CarePlus</a>
+                <a href="patientDashboard.php" class="text-2xl font-bold text-dark-orchid">CarePlus</a>
             </div>
             <nav class="px-4 space-y-2">
                 <a href="patientDashboard.php" class="flex items-center space-x-3 px-4 py-3 bg-purple-100 text-dark-orchid rounded-lg">
@@ -98,28 +99,18 @@ $conn->close();
                     <i class="fa-regular fa-user w-5"></i>
                     <span>My Profile</span>
                 </a>
-                
-                <a href="find_provider.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
-                    <i class="fa-solid fa-calendar-plus w-5"></i>
-                    <span>Book Appointment</span>
-                </a>
                 <a href="patientAppointments.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
                     <i class="fa-solid fa-calendar-days w-5"></i>
                     <span>My Appointments</span>
                 </a>
-    
                 <a href="caregiverBooking.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
                     <i class="fa-solid fa-hands-holding-child w-5"></i>
                     <span>Caregiver Bookings</span>
                 </a>
-                <a href="upload_medical_history.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
+                <a href="patientMedicalHistory.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
                     <i class="fa-solid fa-file-medical w-5"></i>
                     <span>Medical History</span>
                 </a>
-                <a href="my_transactions.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg">
-                    <i class="fa-solid fa-money-bill-wave w-5"></i><span>My Transactions</span>
-                </a>
-
                 <a href="logout.php" class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg mt-8">
                     <i class="fa-solid fa-arrow-right-from-bracket w-5"></i>
                     <span>Logout</span>
@@ -127,7 +118,9 @@ $conn->close();
             </nav>
         </aside>
 
+        <!-- Main Content -->
         <main class="flex-1 p-8">
+            <!-- Header -->
             <header class="flex justify-between items-center mb-8">
                 <div>
                     <h1 class="text-3xl font-bold text-slate-800">Welcome back, <?php echo htmlspecialchars($userName); ?>!</h1>
@@ -144,6 +137,7 @@ $conn->close();
                 </div>
             </header>
 
+            <!-- Stats Cards -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
                 <div class="stat-card text-white p-6 rounded-lg">
                     <div class="flex items-center justify-between">
@@ -174,25 +168,26 @@ $conn->close();
                 </div>
             </div>
 
+            <!-- Quick Actions -->
             <div class="mb-8">
                 <h2 class="text-2xl font-bold text-slate-800 mb-6">Quick Actions</h2>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <a href="requestAppointment.php" class="feature-card bg-white p-6 rounded-lg shadow-orchid-custom text-center hover:shadow-lg">
+                    <a href="bookAppointment.php" class="feature-card bg-white p-6 rounded-lg shadow-orchid-custom text-center hover:shadow-lg">
                         <i class="fa-solid fa-calendar-plus fa-2x text-dark-orchid mb-4"></i>
-                        <h3 class="text-lg font-semibold text-slate-800">Request Appointment</h3>
+                        <h3 class="text-lg font-semibold text-slate-800">Book Appointment</h3>
                         <p class="text-gray-600 text-sm mt-2">Book new appointment with providers</p>
                     </a>
                     <a href="patientAppointments.php" class="feature-card bg-white p-6 rounded-lg shadow-orchid-custom text-center hover:shadow-lg">
                         <i class="fa-solid fa-calendar-days fa-2x text-dark-orchid mb-4"></i>
-                        <h3 class="text-lg font-semibold text-slate-800">View Appointments</h3>
-                        <p class="text-gray-600 text-sm mt-2">Check your scheduled appointments</p>
+                        <h3 class="text-lg font-semibold text-slate-800">My Appointments</h3>
+                        <p class="text-gray-600 text-sm mt-2">View and manage your appointments</p>
                     </a>
-                    <a href="#" class="feature-card bg-white p-6 rounded-lg shadow-orchid-custom text-center hover:shadow-lg">
+                    <a href="caregiverBooking.php" class="feature-card bg-white p-6 rounded-lg shadow-orchid-custom text-center hover:shadow-lg">
                         <i class="fa-solid fa-hands-holding-child fa-2x text-dark-orchid mb-4"></i>
                         <h3 class="text-lg font-semibold text-slate-800">Caregiver Bookings</h3>
                         <p class="text-gray-600 text-sm mt-2">Manage your caregiver services</p>
                     </a>
-                    <a href="#" class="feature-card bg-white p-6 rounded-lg shadow-orchid-custom text-center hover:shadow-lg">
+                    <a href="patientMedicalHistory.php" class="feature-card bg-white p-6 rounded-lg shadow-orchid-custom text-center hover:shadow-lg">
                         <i class="fa-solid fa-file-medical fa-2x text-dark-orchid mb-4"></i>
                         <h3 class="text-lg font-semibold text-slate-800">Medical History</h3>
                         <p class="text-gray-600 text-sm mt-2">Access your medical records</p>
@@ -200,7 +195,9 @@ $conn->close();
                 </div>
             </div>
 
+            <!-- Recent Activity & Health Overview -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Health Overview -->
                 <div class="bg-white p-6 rounded-lg shadow-orchid-custom">
                     <h3 class="text-xl font-bold text-slate-800 mb-4">Health Overview</h3>
                     <?php if ($patientInfo): ?>
@@ -252,9 +249,11 @@ $conn->close();
                     <?php endif; ?>
                 </div>
 
+                <!-- Recent Activity -->
                 <div class="bg-white p-6 rounded-lg shadow-orchid-custom">
                     <h3 class="text-xl font-bold text-slate-800 mb-4">Recent Activity</h3>
                     <div class="space-y-4">
+                        <!-- This will be populated with actual data from appointments and bookings -->
                         <div class="text-center py-8 text-gray-500">
                             <i class="fa-solid fa-clock fa-2x mb-3"></i>
                             <p>No recent activity</p>

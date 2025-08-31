@@ -8,7 +8,15 @@ if (!isset($_SESSION['pending_user_id']) || $_SESSION['pending_user_role'] !== '
 }
 
 // --- Database Connection ---
-require_once 'config.php';
+$host = "localhost";
+$username = "root";
+$password = "";
+$database = "healthcare";
+
+$conn = new mysqli($host, $username, $password, $database);
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
+}
 
 $userID = $_SESSION['pending_user_id'];
 $errorMsg = "";
