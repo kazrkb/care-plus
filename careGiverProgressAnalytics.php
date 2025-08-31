@@ -29,3 +29,19 @@ if (empty($_SESSION['csrf_token'])) {
 
 $careGiverID = (int)$_SESSION['userID'];
 $userName    = $_SESSION['Name'] ?? 'CareGiver';
+// ------------------------- DUMMY DATA -------------------------
+$patients = [
+    ['patientID' => 1, 'patientName' => 'Alice'],
+    ['patientID' => 2, 'patientName' => 'Bob'],
+    ['patientID' => 3, 'patientName' => 'Charlie'],
+];
+$patientIds = array_column($patients, 'patientID');
+
+$progressData = [
+    ['patientID'=>1,'dataType'=>'blood_pressure','value'=>120,'measurementUnit'=>'mmHg','recordedDate'=>'2025-08-29 08:00','notes'=>'Normal','patientName'=>'Alice'],
+    ['patientID'=>1,'dataType'=>'blood_sugar','value'=>5.5,'measurementUnit'=>'mmol/L','recordedDate'=>'2025-08-29 09:00','notes'=>'After breakfast','patientName'=>'Alice'],
+    ['patientID'=>2,'dataType'=>'weight','value'=>70,'measurementUnit'=>'kg','recordedDate'=>'2025-08-30 10:00','notes'=>'','patientName'=>'Bob'],
+    ['patientID'=>2,'dataType'=>'heart_rate','value'=>75,'measurementUnit'=>'bpm','recordedDate'=>'2025-08-30 11:00','notes'=>'Resting','patientName'=>'Bob'],
+    ['patientID'=>3,'dataType'=>'temperature','value'=>36.6,'measurementUnit'=>'°C','recordedDate'=>'2025-08-31 12:00','notes'=>'Normal','patientName'=>'Charlie'],
+    ['patientID'=>3,'dataType'=>'oxygen_level','value'=>98,'measurementUnit'=>'%','recordedDate'=>'2025-08-31 12:30','notes'=>'Good','patientName'=>'Charlie'],
+];
