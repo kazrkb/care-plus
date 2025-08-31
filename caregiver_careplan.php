@@ -1,21 +1,5 @@
 <?php
-/**
- * CAREGIVER CARE PLAN MANAGEMENT PAGE
- * 
- * This page allows caregivers to create, view, and manage care plans for their patients.
- * 
- * Database Tables Used:
- * - careplan: Stores care plan details (exercisePlan, therapyInstructions, progressNotes)
- * - caregiverbooking: Links care plans to patient bookings
- * - users: Patient and caregiver information
- * - patient: Patient-specific details
- * 
- * Features:
- * - Create new care plans for active patient bookings
- * - View existing care plans with patient information
- * - Edit and update care plan details
- * - Progress tracking and notes management
- */
+
 
 session_start();
 
