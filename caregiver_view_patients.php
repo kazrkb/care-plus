@@ -169,12 +169,6 @@ $conn->close();
                     <span>Availability</span>
                 </a>
                 
-                <a href="my_bookings.php" 
-                   class="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-slate-100 rounded-lg transition">
-                    <i class="fa-solid fa-calendar-check w-5"></i>
-                    <span>My Bookings</span>
-                </a>
-                
                 <a href="caregiver_view_patients.php" 
                    class="flex items-center space-x-3 px-4 py-3 bg-purple-100 text-dark-orchid rounded-lg">
                     <i class="fa-solid fa-book-medical w-5"></i>
